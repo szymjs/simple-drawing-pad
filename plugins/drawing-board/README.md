@@ -1,5 +1,7 @@
 # drawing-board
 
+**Draw your idea, then paste it from the clipboard wherever you need it. It just works. Simple as that.**
+
 Sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) and let Claude look at it.
 
 - **Pen window (Windows).** A keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws on the sheet, with pressure, while the window is active. On pen displays and touch laptops it draws where the pen is; with no tablet it uses the mouse. Enter saves the drawing as a PNG and copies it to the clipboard, so you can paste it into Claude anywhere in Windows with Ctrl+V. In Claude Code, Claude can also pick it up by itself.
