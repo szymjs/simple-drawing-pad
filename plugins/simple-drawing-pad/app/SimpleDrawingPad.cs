@@ -25,8 +25,10 @@ namespace SimpleDrawingPadApp
     {
         public const uint WTI_DEFCONTEXT = 3, WTI_DEVICES = 100, DVC_HWCAPS = 2, DVC_NPRESSURE = 15, HWC_INTEGRATED = 0x0001;
         public const uint CXO_MESSAGES = 0x0004;
-        public const uint PK_STATUS = 0x0002, PK_CURSOR = 0x0020, PK_BUTTONS = 0x0040, PK_X = 0x0080, PK_Y = 0x0100, PK_NORMAL_PRESSURE = 0x0400;
+        public const uint PK_STATUS = 0x0002, PK_TIME = 0x0004, PK_CURSOR = 0x0020, PK_BUTTONS = 0x0040, PK_X = 0x0080, PK_Y = 0x0100, PK_NORMAL_PRESSURE = 0x0400;
         public const int WT_PACKET = 0x7FF0, WT_PROXIMITY = 0x7FF5;
+        public const uint TPS_PROXIMITY = 0x0001;   // pkStatus: the pen has left the tablet's range
+        public const uint TPS_QUEUE_ERR = 0x0002;   // pkStatus: packets were lost before this one
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct LOGCONTEXT
@@ -43,7 +45,8 @@ namespace SimpleDrawingPadApp
 
         // field order follows the PK_* bit order
         [StructLayout(LayoutKind.Sequential)]
-        public struct PACKET { public uint pkStatus, pkCursor, pkButtons; public int pkX, pkY; public uint pkNormalPressure; }
+        // field order follows the PK_* bit order: status, time, cursor, buttons, x, y, pressure
+        public struct PACKET { public uint pkStatus, pkTime, pkCursor, pkButtons; public int pkX, pkY; public uint pkNormalPressure; }
 
         [DllImport("Wintab32.dll", CharSet = CharSet.Unicode)] public static extern uint WTInfoW(uint cat, uint idx, ref LOGCONTEXT ctx);
         [DllImport("Wintab32.dll", CharSet = CharSet.Unicode)] public static extern uint WTInfoW(uint cat, uint idx, ref AXIS axis);
@@ -97,6 +100,13 @@ namespace SimpleDrawingPadApp
         int level = 3;
         float width { get { return Levels[level - 1]; } }
         bool eraserMode, sideEraser, tipEraser, hover, cancelled;
+        bool tipBitSeen;   // the driver reports tip contact as button 0 (Wacom does); until then pressure decides
+        // a pause in the pen's packets means it was lifted: tablets report every ~7-8 ms, also while the pen rests
+        const uint MaxGapMs = 30;
+        uint lastPacketTime;
+        // the first packet after the pen touches down carries a stale position (where the pen last touched down):
+        // starting the stroke there drew a thin line from the previous letter, so a stroke starts with the next packet
+        bool touchPending;
         bool Erasing { get { return eraserMode || sideEraser || tipEraser; } }
         Graphics sheetG;
         Rectangle lastCursorRect = Rectangle.Empty;
@@ -211,7 +221,7 @@ namespace SimpleDrawingPadApp
                 if (Wintab.WTInfoW(Wintab.WTI_DEVICES, Wintab.DVC_NPRESSURE, ref ax) != 0 && ax.axMax > 0) maxPressure = ax.axMax;
                 lc.lcName = "Simple Drawing Pad";
                 lc.lcOptions |= Wintab.CXO_MESSAGES;
-                lc.lcPktData = Wintab.PK_STATUS | Wintab.PK_CURSOR | Wintab.PK_BUTTONS | Wintab.PK_X | Wintab.PK_Y | Wintab.PK_NORMAL_PRESSURE;
+                lc.lcPktData = Wintab.PK_STATUS | Wintab.PK_TIME | Wintab.PK_CURSOR | Wintab.PK_BUTTONS | Wintab.PK_X | Wintab.PK_Y | Wintab.PK_NORMAL_PRESSURE;
                 lc.lcPktMode = 0;
                 lc.lcMoveMask = lc.lcPktData;
                 lc.lcBtnUpMask = lc.lcBtnDnMask;
@@ -242,11 +252,15 @@ namespace SimpleDrawingPadApp
                 if (Wintab.WTPacket(m.LParam, (uint)m.WParam.ToInt64(), ref p)) OnPen(p);
                 return;
             }
+            // pen left the tablet's range: the stroke ends even if no "lifted" packet arrived
+            if (m.Msg == Wintab.WT_PROXIMITY && (m.LParam.ToInt64() & 0xFFFF) == 0) cur = null;
             base.WndProc(ref m);
         }
 
         void OnPen(Wintab.PACKET p)
         {
+            uint gap = unchecked(p.pkTime - lastPacketTime);   // ms since the previous packet (wraps safely)
+            lastPacketTime = p.pkTime;
             float x = Math.Max(0, Math.Min(SheetW, p.pkX));
             float y = p.pkY < 0 ? -p.pkY : p.pkY;
             y = Math.Max(0, Math.Min(SheetH, y));
@@ -255,12 +269,20 @@ namespace SimpleDrawingPadApp
             bool side = (p.pkButtons & 0x6) != 0;                       // either side button held = eraser
             if (side != sideEraser || tip != tipEraser) { sideEraser = side; tipEraser = tip; UpdateStatus(); }
             penAt = new PointF(x, y); hover = true;
-            if (pr > 0.01f)
+            // contact = the driver's own tip switch (its click threshold); drivers without it: any pressure
+            bool tipDown = (p.pkButtons & 1) != 0;
+            if (tipDown) tipBitSeen = true;
+            bool inRange = (p.pkStatus & Wintab.TPS_PROXIMITY) == 0;
+            bool contact = inRange && (tipBitSeen ? tipDown : pr > 0.01f);
+            if (contact)
             {
-                if (cur == null) StartStroke(penAt, pr, tip || side);
-                else AddPoint(penAt, pr);
+                // never join across a gap: lost packets or a pause in the packets (the pen was lifted) start a new stroke
+                if (cur != null && ((p.pkStatus & Wintab.TPS_QUEUE_ERR) != 0 || gap > MaxGapMs)) cur = null;
+                if (cur != null) AddPoint(penAt, pr);
+                else if (!touchPending) touchPending = true;   // first packet of a touch: its position is stale, skip it
+                else { touchPending = false; StartStroke(penAt, pr, tip || side); }
             }
-            else cur = null;
+            else { cur = null; touchPending = false; }
             InvalidateCursor();
         }
 
