@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>drawing-board</title>
+<style>
+  :root { --bg: #f7f7f4; --ink: #1d1d1f; --bar: #ffffff; --line: #d9d9d4; --accent: #2563eb; --muted: #6b6b70; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); font: 14px system-ui, "Segoe UI", sans-serif; color: var(--ink); overflow: hidden; }
+  #bar { position: fixed; top: 0; left: 0; right: 0; min-height: 52px; display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--bar); border-bottom: 1px solid var(--line); z-index: 2; flex-wrap: wrap; }
+  #bar button { height: 34px; min-width: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; }
+  #bar button.on { border-color: var(--accent); box-shadow: 0 0 0 2px #2563eb33; }
+  .sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+  .sw.on { box-shadow: 0 0 0 2px var(--accent); }
+  .sep { width: 1px; height: 28px; background: var(--line); margin: 0 4px; }
+  #hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+  canvas { position: fixed; left: 0; touch-action: none; cursor: crosshair; background: var(--bg); }
+  canvas.grid { background-image: linear-gradient(#e4e4de 1px, transparent 1px), linear-gradient(90deg, #e4e4de 1px, transparent 1px); background-size: 32px 32px; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <button id="pen" class="on" data-i18n="pen"></button>
+  <button id="eraser" data-i18n="eraser"></button>
+  <span class="sep"></span>
+  <span class="sw on" data-c="#1d1d1f" style="background:#1d1d1f"></span>
+  <span class="sw" data-c="#d62828" style="background:#d62828"></span>
+  <span class="sw" data-c="#2563eb" style="background:#2563eb"></span>
+  <span class="sw" data-c="#15803d" style="background:#15803d"></span>
+  <span class="sw" data-c="#ea8a00" style="background:#ea8a00"></span>
+  <span class="sep"></span>
+  <button class="sz" data-s="2" data-i18n="thin"></button>
+  <button class="sz on" data-s="4" data-i18n="medium"></button>
+  <button class="sz" data-s="9" data-i18n="thick"></button>
+  <span class="sep"></span>
+  <button id="grid" data-i18n="grid"></button>
+  <button id="undo" data-i18n="undo"></button>
+  <button id="clear" data-i18n="clear"></button>
+  <button id="save" data-i18n="save"></button>
+  <button id="full" data-i18n="full"></button>
+  <span id="hint" data-i18n="hint"></span>
+</div>
+<canvas id="c"></canvas>
+<script>
+// drawing-board: a pressure-sensitive drawing board for sketching ideas to Claude. No network, no storage.
+const T = {
+  en: { pen: '✏️ Pen', eraser: '🧽 Eraser', thin: 'thin', medium: 'medium', thick: 'thick', grid: '▦ Grid', undo: '↶ Undo',
+        clear: '🗑 Clear', save: '💾 PNG', full: '⛶ Full screen', exitFull: '⛶ Exit full screen', hint: 'Draw, then tell Claude "done".', confirm: 'Clear the whole drawing?',
+        tPen: 'Pen (P)', tEraser: 'Eraser (E). The back end of a pen also erases.', tGrid: 'Grid (G)', tUndo: 'Undo (Ctrl+Z)', tSave: 'Save as PNG', tFull: 'Full screen (F): bigger board' },
+  pl: { pen: '✏️ Pióro', eraser: '🧽 Gumka', thin: 'cienko', medium: 'średnio', thick: 'grubo', grid: '▦ Siatka', undo: '↶ Cofnij',
+        clear: '🗑 Wyczyść', save: '💾 PNG', full: '⛶ Pełny ekran', exitFull: '⛶ Zamknij pełny ekran', hint: 'Narysuj i napisz Claude „gotowe”.', confirm: 'Wyczyścić cały rysunek?',
+        tPen: 'Pióro (P)', tEraser: 'Gumka (E). Tylna końcówka pióra też ściera.', tGrid: 'Siatka (G)', tUndo: 'Cofnij (Ctrl+Z)', tSave: 'Zapisz jako PNG', tFull: 'Pełny ekran (F): większa tablica' }
+};
+const lang = (new URLSearchParams(location.search).get('lang') || navigator.language || 'en').slice(0, 2);
+const L = T[lang] || T.en;
+document.documentElement.lang = T[lang] ? lang : 'en';
+document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = L[el.dataset.i18n]);
+const tips = {pen: 'tPen', eraser: 'tEraser', grid: 'tGrid', undo: 'tUndo', save: 'tSave', full: 'tFull'};
+for (const [id, k] of Object.entries(tips)) document.getElementById(id).title = L[k];
+
+const bar = document.getElementById('bar'), cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let color = '#1d1d1f', size = 4, mode = 'pen', barH = 52;
+const strokes = [];
+let cur = null;
+
+function resize() {
+  barH = bar.offsetHeight;
+  const dpr = window.devicePixelRatio || 1, h = innerHeight - barH;
+  cv.style.top = barH + 'px';
+  cv.width = innerWidth * dpr; cv.height = h * dpr;
+  cv.style.width = innerWidth + 'px'; cv.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  redraw();
+}
+// draws the segments of a stroke from point `from` on (all of it when `from` is left out)
+function drawStroke(s, from) {
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.globalCompositeOperation = s.mode === 'eraser' ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = s.color;
+  const p = s.pts;
+  if (p.length === 1) { ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(p[0][0], p[0][1], s.mode === 'eraser' ? s.size * 2.5 : s.size * p[0][2] / 2 + .5, 0, 7); ctx.fill(); }
+  for (let i = from || 1; i < p.length; i++) {
+    ctx.lineWidth = s.mode === 'eraser' ? s.size * 5 : Math.max(.6, s.size * (p[i][2] * 1.4 + .2));
+    ctx.beginPath(); ctx.moveTo(p[i - 1][0], p[i - 1][1]); ctx.lineTo(p[i][0], p[i][1]); ctx.stroke();
+  }
+  ctx.restore();
+}
+function redraw() {
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); ctx.restore();
+  // the canvas holds only ink; paper and grid are its CSS background, so the eraser never removes them
+  strokes.forEach(s => drawStroke(s));
+}
+// mouse and touch get a fixed width; a pen uses its pressure (needs Windows Ink on Wacom tablets)
+function pressure(e) { return e.pointerType === 'pen' ? (e.pressure || .5) : .55; }
+// one pointer per stroke; only the primary button or the pen's eraser end draws
+cv.addEventListener('pointerdown', e => {
+  if (cur || (e.button !== 0 && !(e.buttons & 32))) return;
+  cv.setPointerCapture(e.pointerId);
+  const eraserTip = e.pointerType === 'pen' && (e.buttons & 32);
+  cur = {id: e.pointerId, mode: eraserTip ? 'eraser' : mode, color, size, pts: [[e.offsetX, e.offsetY, pressure(e)]]};
+  strokes.push(cur); drawStroke(cur);
+});
+cv.addEventListener('pointermove', e => {
+  if (!cur || e.pointerId !== cur.id) return;
+  const n = cur.pts.length, evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of evs) cur.pts.push([ev.offsetX, ev.offsetY, pressure(ev)]);
+  drawStroke(cur, n); // only the new segments
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => cv.addEventListener(t, e => { if (cur && e.pointerId === cur.id) cur = null; }));
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+const $ = id => document.getElementById(id);
+// toolbar buttons never keep focus, so a later Space or Enter cannot repeat them
+bar.querySelectorAll('button').forEach(b => b.tabIndex = -1);
+bar.addEventListener('mousedown', e => e.preventDefault());
+function setMode(m) { mode = m; $('pen').classList.toggle('on', m === 'pen'); $('eraser').classList.toggle('on', m === 'eraser'); }
+$('pen').onclick = () => setMode('pen');
+$('eraser').onclick = () => setMode('eraser');
+document.querySelectorAll('.sw').forEach(el => el.onclick = () => { color = el.dataset.c; document.querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === el)); setMode('pen'); });
+document.querySelectorAll('.sz').forEach(el => el.onclick = () => { size = +el.dataset.s; document.querySelectorAll('.sz').forEach(x => x.classList.toggle('on', x === el)); });
+$('grid').onclick = () => $('grid').classList.toggle('on', cv.classList.toggle('grid'));
+$('undo').onclick = () => { strokes.pop(); cur = null; redraw(); };
+$('clear').onclick = () => { if (strokes.length && confirm(L.confirm)) { strokes.length = 0; cur = null; redraw(); } };
+// the PNG gets a white background and no grid; its name uses local time
+$('save').onclick = () => {
+  const out = document.createElement('canvas'), o = out.getContext('2d'), d = new Date();
+  out.width = cv.width; out.height = cv.height;
+  o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height); o.drawImage(cv, 0, 0);
+  const a = document.createElement('a');
+  a.download = 'drawing_' + new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+  a.href = out.toDataURL('image/png'); a.click();
+};
+// full screen: a bigger board
+$('full').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+document.addEventListener('fullscreenchange', () => { $('full').textContent = document.fullscreenElement ? L.exitFull : L.full; resize(); });
+addEventListener('keydown', e => {
+  const k = (e.key || '').toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); $('undo').click(); }
+  else if (e.ctrlKey || e.altKey || e.metaKey) return; // leave browser shortcuts such as Ctrl+F alone
+  else if (k === 'p') setMode('pen'); else if (k === 'e') setMode('eraser'); else if (k === 'g') $('grid').click(); else if (k === 'f') $('full').click();
+});
+addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "safe-device-work",
+  "displayName": "Safe Device Work",
+  "version": "0.1.0",
+  "description": "Guardrails for Claude when it works on real disks, USB sticks, NAS/RAID, microcontroller flash, admin sessions, installers and accounts: no destructive tests on real hardware, ask before deleting or flashing, never handle passwords or accept terms.",
+  "author": {
+    "name": "szymjs"
+  },
+  "license": "MIT",
+  "keywords": ["safety", "disks", "usb", "nas", "raid", "esp32", "firmware", "admin", "guardrails"],
+  "skills": "./skills/"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "drawing-board",
+  "displayName": "drawing-board",
+  "version": "0.3.0",
+  "description": "Sketch an idea by hand and let Claude look at it: a Windows pen window that opens with a keyboard shortcut (with a regular tablet the whole tablet draws), or an offline browser board on any system.",
+  "author": {
+    "name": "szymjs"
+  },
+  "license": "MIT",
+  "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab"],
+  "skills": "./skills/"
+}

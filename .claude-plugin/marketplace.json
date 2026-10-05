@@ -1,0 +1,27 @@
+{
+  "name": "workshop-plugins",
+  "owner": {
+    "name": "szymjs"
+  },
+  "metadata": {
+    "description": "Small, practical Claude Code plugins from a home workshop: hand sketching and safety rules for hardware work."
+  },
+  "plugins": [
+    {
+      "name": "drawing-board",
+      "source": "./plugins/drawing-board",
+      "description": "Sketch an idea by hand and let Claude look at it: a Windows pen window that opens with a keyboard shortcut (with a regular tablet the whole tablet draws), or an offline browser board on any system.",
+      "version": "0.3.0",
+      "license": "MIT",
+      "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab"]
+    },
+    {
+      "name": "safe-device-work",
+      "source": "./plugins/safe-device-work",
+      "description": "Guardrails for Claude when it works on real disks, USB sticks, NAS/RAID, microcontroller flash, admin sessions and accounts.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "keywords": ["safety", "disks", "firmware", "admin"]
+    }
+  ]
+}
