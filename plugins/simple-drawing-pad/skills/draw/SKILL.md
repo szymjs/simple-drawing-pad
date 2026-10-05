@@ -1,6 +1,6 @@
 ---
 name: draw
-description: Let the user sketch an idea by hand (layout, wiring, UI mockup, diagram, handwriting) with a graphics tablet, mouse or touch screen, then look at the drawing. On Windows a pen window opens with a keyboard shortcut (with a regular tablet the whole tablet draws on the sheet); elsewhere an offline browser board is used. Use when the user wants to draw, sketch or show something by hand.
+description: Let the user sketch an idea by hand (layout, wiring, UI mockup, diagram, handwriting) and look at the drawing. On Windows, Ctrl+Alt+D opens the drawing window (with a graphics tablet, the whole tablet is the drawing area); Enter copies the drawing to the clipboard and the user pastes it with Ctrl+V. Elsewhere an offline browser board is used. Use when the user wants to draw, sketch or show something by hand.
 ---
 
 # Simple Drawing Pad
