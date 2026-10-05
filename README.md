@@ -19,7 +19,12 @@ In Claude Code:
 /plugin install simple-drawing-pad@simple-drawing-pad
 ```
 
-Start a new session afterwards so the skill loads. Then ask Claude to install the pen window, or to open the browser board. The skill is also available as `/simple-drawing-pad:draw`.
+Or add it from the Claude directory. Start a new session afterwards, then:
+
+1. Run **`/simple-drawing-pad:install`** once to install the drawing window (`/simple-drawing-pad:uninstall` removes it).
+2. Press **Ctrl+Alt+D**, draw, press Enter, paste with **Ctrl+V**.
+
+The skill is also available as `/simple-drawing-pad:draw` (on other systems it opens the offline browser board).
 
 ## Where it works
 

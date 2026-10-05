@@ -8,9 +8,10 @@ description: Let the user sketch an idea by hand (layout, wiring, UI mockup, dia
 ## Pen window (Windows)
 The program is in the plugin's `app` folder, i.e. `../../app` relative to this skill's folder (source `SimpleDrawingPad.cs`, built by the C# compiler that ships with Windows, nothing downloaded, no admin rights).
 
-- **Install once, only after asking the user:**
+- **Install once:** the user runs `/simple-drawing-pad:install` (and `/simple-drawing-pad:uninstall` to remove it). If the pen window is not installed yet, suggest that command; install yourself only after asking the user:
   `powershell -NoProfile -ExecutionPolicy Bypass -File "<plugin folder>\app\install.ps1" [-Autostart] [-Uninstall]`
   It builds the program, installs it to `%LOCALAPPDATA%\Programs\simple-drawing-pad` and starts the shortcut helper (tray icon). `-Autostart` also starts the helper at every logon (a per-user Run entry in the registry); `-Uninstall` removes the program and autostart and keeps the drawings.
+- **Working from the cloud** (you reach the user's computer through the Claude app instead of running commands on it): ask for a new, empty folder for the installer, such as `C:\Users\<name>\simple-drawing-pad`, not Downloads, copy the plugin's `app` folder there and run its `install.ps1`.
 - **Shortcut:** Ctrl+Alt+D by default, changeable from the tray icon menu.
 - **Keys:** 1–5 width, 6 black, 7 orange, 8 light blue, 9 red, 0 grey, Space/E eraser, Backspace undo, Delete clear, **Enter = copy to the clipboard** (the user then pastes with Ctrl+V), Esc = cancel. In whole-tablet mode the pen's back end and side buttons erase.
 - **Copy:** Enter, and also closing the window (X, Alt+F4), saves a PNG in `<Pictures>\simple-drawing-pad` and copies it to the clipboard. Esc copies nothing; it keeps the drawing in `<Pictures>\simple-drawing-pad\cancelled`. An empty sheet is not copied.

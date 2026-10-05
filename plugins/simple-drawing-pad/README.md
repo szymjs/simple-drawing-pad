@@ -12,8 +12,11 @@ Sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) a
 
 ## Install
 
-1. In Claude Code: `/plugin marketplace add szymjs/simple-drawing-pad`, then `/plugin install simple-drawing-pad@simple-drawing-pad`, and start a new session. The skill is `/simple-drawing-pad:draw`, or just ask Claude to let you draw.
-2. For the pen window, ask Claude to install it, or run this from the root of a clone of [szymjs/simple-drawing-pad](https://github.com/szymjs/simple-drawing-pad):
+1. Add the plugin: from the Claude directory, or in Claude Code with `/plugin marketplace add szymjs/simple-drawing-pad` and `/plugin install simple-drawing-pad@simple-drawing-pad`. Start a new session.
+2. In Claude Code, run **`/simple-drawing-pad:install`** once (approve the one installer command). `/simple-drawing-pad:uninstall` removes it again.
+3. Press **Ctrl+Alt+D**, draw, press Enter, paste with **Ctrl+V**. The skill is `/simple-drawing-pad:draw`, or just ask Claude to let you draw.
+
+Without Claude Code, run this from the root of a clone of [szymjs/simple-drawing-pad](https://github.com/szymjs/simple-drawing-pad):
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File "plugins\simple-drawing-pad\app\install.ps1"
@@ -44,6 +47,7 @@ An empty sheet is never copied. While the window is active in tablet mode the po
 
 ## What it runs and stores
 
+- `/simple-drawing-pad:install` and `/simple-drawing-pad:uninstall` only ask Claude to run `install.ps1 -Autostart` or `install.ps1 -Uninstall`; Claude Code asks you to approve the command first.
 - `install.ps1` builds `SimpleDrawingPad.exe` from the included source (`app/SimpleDrawingPad.cs`) with the Windows C# compiler `csc.exe` into `app\bin\` inside the plugin folder, copies it to `%LOCALAPPDATA%\Programs\simple-drawing-pad` and starts it in the notification area. It stops a running Simple Drawing Pad helper first.
 - With `-Autostart` it adds a per-user autostart value `simple-drawing-pad` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` that starts `SimpleDrawingPad.exe --tray` at logon.
 - Each copied drawing is saved as a time-stamped PNG in `Pictures\simple-drawing-pad`, together with `latest.png`, `latest.txt` (path of the newest drawing) and `status.txt` (result of the last session: copied, cancelled or empty). Cancelled drawings go to `Pictures\simple-drawing-pad\cancelled`.

@@ -11,7 +11,7 @@
       "name": "simple-drawing-pad",
       "source": "./plugins/simple-drawing-pad",
       "description": "Sketch an idea by hand and let Claude look at it. Press Ctrl+Alt+D to open the drawing window (with a graphics tablet, the whole tablet is your drawing area). Use Ctrl+V to paste it in the chat. Simple as that.",
-      "version": "0.4.5",
+      "version": "0.4.6",
       "license": "MIT",
       "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab"]
     }
