@@ -18,7 +18,7 @@ function Stop-Helper {
     $ours = @(Get-CimInstance Win32_Process -Filter "Name='SimpleDrawingPad.exe' OR Name='DrawingBoard.exe'" |
         Where-Object { $_.ExecutablePath -eq $exe -or $_.ExecutablePath -eq $bin -or $_.ExecutablePath -eq $legacyExe } |
         ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
-    if ($ours | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -in 'Simple Drawing Pad', 'drawing-board' }) {
+    if ($ours | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.MainWindowTitle -like 'Simple Drawing Pad*' -or $_.MainWindowTitle -eq 'drawing-board') }) {
         throw 'Close the drawing window (Enter or Esc) first.'
     }
     foreach ($p in $ours) {

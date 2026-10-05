@@ -7,7 +7,7 @@
 
 A Claude Code plugin: sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) and let Claude look at it.
 
-- **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it. Enter sends the drawing.
+- **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it. Enter copies the drawing to the clipboard; paste it with Ctrl+V.
 - **Browser board (any system):** one offline page with pen pressure, eraser, undo and PNG export.
 
 ## Install

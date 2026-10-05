@@ -37,7 +37,7 @@ Add `-Autostart` to start the shortcut helper at every logon, or `-Uninstall` to
 | Space or E | eraser (in whole-tablet mode the pen's back end and side buttons erase too) |
 | Backspace | undo |
 | Delete | clear the sheet |
-| Enter | send (closing the window with X or Alt+F4 also sends) |
+| Enter | copy the drawing to the clipboard, then paste it with **Ctrl+V** (closing the window with X or Alt+F4 does the same) |
 | Esc | cancel: nothing is sent, a copy is kept in the `cancelled` folder |
 
 An empty sheet is never sent. While the window is active in tablet mode the pointer stays inside the sheet; switch away (Alt+Tab) to release it. Change the shortcut from the tray icon menu ("Change shortcut…").
@@ -48,7 +48,7 @@ An empty sheet is never sent. While the window is active in tablet mode the poin
 - With `-Autostart` it adds a per-user autostart value `simple-drawing-pad` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` that starts `SimpleDrawingPad.exe --tray` at logon.
 - Each sent drawing is saved as a time-stamped PNG in `Pictures\simple-drawing-pad`, together with `latest.png`, `latest.txt` (path of the newest drawing) and `status.txt` (result of the last session: sent, cancelled or empty). Cancelled drawings go to `Pictures\simple-drawing-pad\cancelled`.
 - The keyboard shortcut is kept in `%APPDATA%\simple-drawing-pad\hotkey.txt`.
-- A sent drawing is copied to the clipboard.
+- A sent drawing is copied to the clipboard, and a Windows notification says so ("paste it with Ctrl+V").
 - The program does not use the network and sends nothing anywhere. Claude sees a drawing only when you paste it or when Claude reads it from your Pictures folder.
 - To pick up a drawing by itself in Claude Code, Claude runs a small PowerShell loop in the background that checks `Pictures\simple-drawing-pad\status.txt` every 2 seconds, for up to 30 minutes, and then opens the new PNG. It only reads that folder.
 - The browser board saves its PNG through the browser's normal download.

@@ -11,7 +11,7 @@
       "name": "simple-drawing-pad",
       "source": "./plugins/simple-drawing-pad",
       "description": "Sketch an idea by hand and let Claude look at it: a Windows pen window that opens with a keyboard shortcut (with a regular tablet the whole tablet draws), or an offline browser board on any system.",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "license": "MIT",
       "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab"]
     }

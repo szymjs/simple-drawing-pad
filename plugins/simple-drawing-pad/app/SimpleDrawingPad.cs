@@ -114,10 +114,14 @@ namespace SimpleDrawingPadApp
         IntPtr ctx = IntPtr.Zero;
         int maxPressure = 1023;
         public string SavedPath;
+        public static string HotkeyName;   // set by the tray helper; shown in the title so people learn the shortcut
 
         public BoardForm()
         {
-            Text = "Simple Drawing Pad";
+            // the title says how to use it: open, send, paste (install.ps1 matches titles starting "Simple Drawing Pad")
+            Text = "Simple Drawing Pad  —  " + (HotkeyName != null ? string.Format(Loc.T("{0} opens", "{0} otwiera"), HotkeyName) + "  ·  " : "")
+                 + Loc.T("Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app",
+                         "Enter kopiuje do schowka  ·  Ctrl+V wkleja w czacie lub dowolnym programie");
             KeyPreview = true;
             DoubleBuffered = true;
             BackColor = Color.FromArgb(247, 247, 244);
@@ -156,7 +160,7 @@ namespace SimpleDrawingPadApp
             x = AddButton(Loc.T("Space eraser", "Spacja gumka"), x, delegate { ToggleEraser(); });
             x = AddButton(Loc.T("Delete clear", "Delete wyczyść"), x, delegate { ClearAll(); });
             x += 10;
-            x = AddButton(Loc.T("Enter: send", "Enter: wyślij"), x, delegate { Close(); });
+            x = AddButton(Loc.T("Enter: copy to clipboard, Ctrl+V: paste in chat", "Enter: kopiuj do schowka, Ctrl+V: wklej w czacie"), x, delegate { Close(); });
             x = AddButton(Loc.T("Esc: cancel", "Esc: anuluj"), x, delegate { cancelled = true; Close(); });
             status.AutoSize = true; status.Location = new Point(x + 12, 15); status.ForeColor = Color.DimGray;
             hint.ShowAlways = true;   // in tablet mode the cursor is kept on the sheet, so the tooltip shows when the board is inactive
@@ -551,6 +555,7 @@ namespace SimpleDrawingPadApp
             if ((k & Keys.Shift) != 0) mods |= Native.MOD_SHIFT;
             bool ok = Native.RegisterHotKey(hk.Handle, 1, mods, (uint)(k & Keys.KeyCode));
             string name = Hotkeys.Format(hotkey);
+            BoardForm.HotkeyName = name;
             drawItem.Text = Loc.T("Draw", "Rysuj") + " (" + name + ")";
             icon.Text = "Simple Drawing Pad (" + name + ")";   // NotifyIcon text: at most 63 characters
             return ok;
@@ -581,7 +586,15 @@ namespace SimpleDrawingPadApp
                 if (open.WindowState == FormWindowState.Minimized) open.WindowState = FormWindowState.Normal;
                 open.Activate(); return;
             }
-            open = new BoardForm();
+            BoardForm b = new BoardForm();
+            // after sending, say where the drawing is: on the clipboard, ready for Ctrl+V
+            b.FormClosed += delegate
+            {
+                if (b.SavedPath != null)
+                    icon.ShowBalloonTip(4000, "Simple Drawing Pad", Loc.T("Drawing copied. Paste it with Ctrl+V, e.g. in the chat.",
+                        "Rysunek skopiowany. Wklej go przez Ctrl+V, np. w czacie."), ToolTipIcon.Info);
+            };
+            open = b;
             open.Show(); open.Activate();
         }
         // an open board is closed first, so its drawing is saved; the helper keeps running if the board stays open
