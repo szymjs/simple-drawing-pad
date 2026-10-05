@@ -8,7 +8,7 @@
 //                                       the tray menu, kept in %APPDATA%\simple-drawing-pad\hotkey.txt) opens the board
 // Output: <Pictures>\simple-drawing-pad\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt); Esc: ...\cancelled\
 //         <Pictures> is the Pictures known folder (it may be redirected).
-//         Every close writes <Pictures>\simple-drawing-pad\status.txt (UTF-8): sent | cancelled | empty, PNG path, local time.
+//         Every close writes <Pictures>\simple-drawing-pad\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
 // Build:  build.ps1 (uses the C# compiler that ships with Windows / .NET Framework 4)
 using System;
 using System.Collections.Generic;
@@ -118,7 +118,7 @@ namespace SimpleDrawingPadApp
 
         public BoardForm()
         {
-            // the title says how to use it: open, send, paste (install.ps1 matches titles starting "Simple Drawing Pad")
+            // the title says how to use it: open, copy, paste (install.ps1 matches titles starting "Simple Drawing Pad")
             Text = "Simple Drawing Pad  —  " + (HotkeyName != null ? string.Format(Loc.T("{0} opens", "{0} otwiera"), HotkeyName) + "  ·  " : "")
                  + Loc.T("Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app",
                          "Enter kopiuje do schowka  ·  Ctrl+V wkleja w czacie lub dowolnym programie");
@@ -450,14 +450,14 @@ namespace SimpleDrawingPadApp
                     case Keys.Back: Undo(); return true;                                          // Backspace: undo
                     case Keys.Delete: case Keys.Decimal: ClearAll(); return true;                 // Delete: clear (Backspace brings it back)
                     case Keys.Space: case Keys.E: ToggleEraser(); return true;                    // Space (or E): eraser on/off
-                    case Keys.Enter: Close(); return true;                                        // Enter: done, send to Claude
+                    case Keys.Enter: Close(); return true;                                        // Enter: done, copy to the clipboard
                     case Keys.Escape: cancelled = true; Close(); return true;                     // Esc: close without sending
                 }
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        // ---------- closing sends the drawing
+        // ---------- closing copies the drawing
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             Native.ClipCursor(IntPtr.Zero);
@@ -487,12 +487,12 @@ namespace SimpleDrawingPadApp
             return Path.Combine(pics, "simple-drawing-pad");
         }
         // Enter / close: PNG + latest.png + latest.txt + clipboard. Esc: PNG in cancelled\ only (latest.* untouched),
-        // so a stray Esc never loses a drawing. Every close ends with status.txt (sent | cancelled | empty, PNG path,
+        // so a stray Esc never loses a drawing. Every close ends with status.txt (copied | cancelled | empty, PNG path,
         // local time) for Claude to wait on. Throws when saving fails.
         void Save()
         {
             DateTime now = DateTime.Now;
-            string dir = OutDir(), file = "", state = strokes.Count == 0 ? "empty" : cancelled ? "cancelled" : "sent";
+            string dir = OutDir(), file = "", state = strokes.Count == 0 ? "empty" : cancelled ? "cancelled" : "copied";
             Directory.CreateDirectory(dir);
             if (state != "empty")
             {
@@ -501,7 +501,7 @@ namespace SimpleDrawingPadApp
                 file = Path.Combine(to, "drawing_" + now.ToString("yyyyMMdd_HHmmss") + ".png");
                 sheet.Save(file, ImageFormat.Png);
             }
-            if (state == "sent")
+            if (state == "copied")
             {
                 try { File.Copy(file, Path.Combine(dir, "latest.png"), true); } catch (Exception) { }   // a convenience copy; latest.txt names the real file
                 File.WriteAllText(Path.Combine(dir, "latest.txt"), file + Environment.NewLine + now.ToString("o") + Environment.NewLine);

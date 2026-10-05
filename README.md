@@ -23,7 +23,7 @@ Start a new session afterwards so the skill loads. Then ask Claude to install th
 
 ## Where it works
 
-- **Anywhere in Windows:** the pen window copies each sent drawing to the clipboard, so you can paste it into Claude (or any app) with Ctrl+V.
+- **Anywhere in Windows:** Enter copies each drawing to the clipboard, so you can paste it into Claude (or any app) with Ctrl+V.
 - **Claude Code:** Claude installs the pen window when you ask, and picks up the drawing by itself when you press Enter.
 - **Other systems:** the offline browser board works in any modern browser.
 

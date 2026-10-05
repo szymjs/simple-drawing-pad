@@ -64,4 +64,4 @@ $hk = 'Ctrl+Alt+D'
 $hkFile = Join-Path $env:APPDATA 'simple-drawing-pad\hotkey.txt'
 if (Test-Path -LiteralPath $hkFile) { $t = [IO.File]::ReadAllText($hkFile).Trim(); if ($t) { $hk = $t } }
 "Installed: $exe"
-"Press $hk to draw (change it from the tray icon menu). Enter sends, Esc cancels."
+"Press $hk to draw (change it from the tray icon menu). Enter copies to the clipboard, Ctrl+V pastes, Esc cancels."

@@ -1,7 +1,7 @@
 {
   "name": "simple-drawing-pad",
   "displayName": "Simple Drawing Pad",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Sketch an idea by hand and let Claude look at it: a Windows pen window that opens with a keyboard shortcut (with a regular tablet the whole tablet draws), or an offline browser board on any system.",
   "author": {
     "name": "szymjs"
