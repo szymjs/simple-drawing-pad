@@ -1,6 +1,6 @@
 # drawing-board
 
-**Draw your idea, then paste it from the clipboard wherever you need it. It just works. Simple as that.**
+**Draw your idea, then paste it from the clipboard wherever you need it. It just works. Simple as that.**\n*Simple by design, made for simple use.*
 
 A drawing board for Claude: sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) and let Claude look at it.
 
