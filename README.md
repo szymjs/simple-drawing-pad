@@ -12,12 +12,12 @@ A small Claude Code plugin marketplace (`workshop-plugins`) with two plugins fro
 In Claude Code:
 
 ```
-/plugin marketplace add szymjs/workshop-plugins
+/plugin marketplace add szymjs/drawing-board-for-Claude
 /plugin install drawing-board@workshop-plugins
 /plugin install safe-device-work@workshop-plugins
 ```
 
-Replace `szymjs/workshop-plugins` with this repository's GitHub path. Start a new session afterwards so the skills load.
+Start a new session afterwards so the skills load.
 
 ## drawing-board
 

@@ -7,8 +7,8 @@ Sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) a
 
 ## Install
 
-1. In Claude Code: `/plugin marketplace add szymjs/workshop-plugins`, then `/plugin install drawing-board@workshop-plugins`, and start a new session.
-2. For the pen window, ask Claude to install it, or run this from the root of a clone of `szymjs/workshop-plugins`:
+1. In Claude Code: `/plugin marketplace add szymjs/drawing-board-for-Claude`, then `/plugin install drawing-board@workshop-plugins`, and start a new session.
+2. For the pen window, ask Claude to install it, or run this from the root of a clone of `szymjs/drawing-board-for-Claude`:
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File "plugins\drawing-board\app\install.ps1"
