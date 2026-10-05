@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>drawing-board</title>
+<title>Simple Drawing Pad</title>
 <style>
   :root { --bg: #f7f7f4; --ink: #1d1d1f; --bar: #ffffff; --line: #d9d9d4; --accent: #2563eb; --muted: #6b6b70; }
   * { box-sizing: border-box; }
@@ -43,7 +43,7 @@
 </div>
 <canvas id="c"></canvas>
 <script>
-// drawing-board: a pressure-sensitive drawing board for sketching ideas to Claude. No network, no storage.
+// Simple Drawing Pad: a pressure-sensitive drawing pad for sketching ideas to Claude. No network, no storage.
 const T = {
   en: { pen: '✏️ Pen', eraser: '🧽 Eraser', thin: 'thin', medium: 'medium', thick: 'thick', grid: '▦ Grid', undo: '↶ Undo',
         clear: '🗑 Clear', save: '💾 PNG', full: '⛶ Full screen', exitFull: '⛶ Exit full screen', hint: 'Draw, then tell Claude "done".', confirm: 'Clear the whole drawing?',

@@ -1,17 +1,17 @@
 {
-  "name": "drawing-board",
+  "name": "simple-drawing-pad",
   "owner": {
     "name": "szymjs"
   },
   "metadata": {
-    "description": "A drawing board for Claude: sketch an idea by hand with a graphics tablet, mouse or touch screen and let Claude look at it."
+    "description": "Simple Drawing Pad: sketch an idea by hand with a graphics tablet, mouse or touch screen and let Claude look at it."
   },
   "plugins": [
     {
-      "name": "drawing-board",
-      "source": "./plugins/drawing-board",
+      "name": "simple-drawing-pad",
+      "source": "./plugins/simple-drawing-pad",
       "description": "Sketch an idea by hand and let Claude look at it: a Windows pen window that opens with a keyboard shortcut (with a regular tablet the whole tablet draws), or an offline browser board on any system.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "license": "MIT",
       "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab"]
     }

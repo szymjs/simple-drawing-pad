@@ -1,14 +1,14 @@
-// drawing-board: a pop-up drawing window for Windows. While the window is active, the WHOLE tablet
+// Simple Drawing Pad: a pop-up drawing window for Windows. While the window is active, the WHOLE tablet
 // surface draws into it (Wintab), regardless of how the tablet is mapped to the monitors. That is for regular
 // (opaque) tablets; pen displays and touch screens use the normal pointer and draw where the pen is.
 // Closing the window saves the sheet as PNG (and copies it to the clipboard) for Claude to read.
 //
-// Usage:  DrawingBoard.exe          open the board now, exit after closing it
-//         DrawingBoard.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
-//                                   the tray menu, kept in %APPDATA%\drawing-board\hotkey.txt) opens the board
-// Output: <Pictures>\drawing-board\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt); Esc: ...\cancelled\
+// Usage:  SimpleDrawingPad.exe          open the board now, exit after closing it
+//         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
+//                                       the tray menu, kept in %APPDATA%\simple-drawing-pad\hotkey.txt) opens the board
+// Output: <Pictures>\simple-drawing-pad\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt); Esc: ...\cancelled\
 //         <Pictures> is the Pictures known folder (it may be redirected).
-//         Every close writes <Pictures>\drawing-board\status.txt (UTF-8): sent | cancelled | empty, PNG path, local time.
+//         Every close writes <Pictures>\simple-drawing-pad\status.txt (UTF-8): sent | cancelled | empty, PNG path, local time.
 // Build:  build.ps1 (uses the C# compiler that ships with Windows / .NET Framework 4)
 using System;
 using System.Collections.Generic;
@@ -19,7 +19,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace DrawingBoardApp
+namespace SimpleDrawingPadApp
 {
     static class Wintab
     {
@@ -107,7 +107,7 @@ namespace DrawingBoardApp
 
         public BoardForm()
         {
-            Text = "drawing-board";
+            Text = "Simple Drawing Pad";
             KeyPreview = true;
             DoubleBuffered = true;
             BackColor = Color.FromArgb(247, 247, 244);
@@ -209,7 +209,7 @@ namespace DrawingBoardApp
                 if (Wintab.WTInfoW(Wintab.WTI_DEVICES, Wintab.DVC_HWCAPS, ref caps) != 0 && (caps & Wintab.HWC_INTEGRATED) != 0) return;
                 Wintab.AXIS ax = new Wintab.AXIS();
                 if (Wintab.WTInfoW(Wintab.WTI_DEVICES, Wintab.DVC_NPRESSURE, ref ax) != 0 && ax.axMax > 0) maxPressure = ax.axMax;
-                lc.lcName = "drawing-board";
+                lc.lcName = "Simple Drawing Pad";
                 lc.lcOptions |= Wintab.CXO_MESSAGES;
                 lc.lcPktData = Wintab.PK_STATUS | Wintab.PK_CURSOR | Wintab.PK_BUTTONS | Wintab.PK_X | Wintab.PK_Y | Wintab.PK_NORMAL_PRESSURE;
                 lc.lcPktMode = 0;
@@ -442,7 +442,7 @@ namespace DrawingBoardApp
                 if (strokes.Count > 0)
                     e.Cancel = MessageBox.Show(this, string.Format(Loc.T("The drawing could not be saved:\n{0}\n\nClose the board anyway? The drawing will be lost.",
                         "Nie udało się zapisać rysunku:\n{0}\n\nZamknąć tablicę mimo to? Rysunek przepadnie."), ex.Message),
-                        "drawing-board", MessageBoxButtons.YesNo, MessageBoxIcon.Error, MessageBoxDefaultButton.Button2) != DialogResult.Yes;
+                        "Simple Drawing Pad", MessageBoxButtons.YesNo, MessageBoxIcon.Error, MessageBoxDefaultButton.Button2) != DialogResult.Yes;
                 cancelled = false;
             }
             if (!e.Cancel && ctx != IntPtr.Zero) { Wintab.WTClose(ctx); ctx = IntPtr.Zero; }
@@ -453,12 +453,12 @@ namespace DrawingBoardApp
             base.Dispose(disposing);
             if (disposing) { if (sheetG != null) sheetG.Dispose(); sheet.Dispose(); hint.Dispose(); }
         }
-        // <Pictures>\drawing-board, where <Pictures> is the Pictures known folder (it may be redirected)
+        // <Pictures>\simple-drawing-pad, where <Pictures> is the Pictures known folder (it may be redirected)
         static string OutDir()
         {
             string pics = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures, Environment.SpecialFolderOption.Create);
             if (pics.Length == 0) pics = Path.Combine(Environment.GetEnvironmentVariable("USERPROFILE"), "Pictures");
-            return Path.Combine(pics, "drawing-board");
+            return Path.Combine(pics, "simple-drawing-pad");
         }
         // Enter / close: PNG + latest.png + latest.txt + clipboard. Esc: PNG in cancelled\ only (latest.* untouched),
         // so a stray Esc never loses a drawing. Every close ends with status.txt (sent | cancelled | empty, PNG path,
@@ -495,8 +495,8 @@ namespace DrawingBoardApp
         BoardForm open;
         Keys hotkey;
 
-        // the shortcut is stored as text ("Ctrl+Alt+D") in %APPDATA%\drawing-board\hotkey.txt
-        static readonly string ConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "drawing-board", "hotkey.txt");
+        // the shortcut is stored as text ("Ctrl+Alt+D") in %APPDATA%\simple-drawing-pad\hotkey.txt
+        static readonly string ConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "simple-drawing-pad", "hotkey.txt");
         const Keys DefaultHotkey = Keys.Control | Keys.Alt | Keys.D;
 
         public TrayContext()
@@ -513,7 +513,7 @@ namespace DrawingBoardApp
             Keys saved = DefaultHotkey;
             try { if (File.Exists(ConfigFile)) saved = Hotkeys.Parse(File.ReadAllText(ConfigFile)); } catch (Exception) { saved = DefaultHotkey; }
             if (!Apply(saved))
-                icon.ShowBalloonTip(5000, "drawing-board", string.Format(Loc.T(
+                icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format(Loc.T(
                     "The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".",
                     "Skrót {0} jest zajęty przez inny program. Kliknij ikonę prawym przyciskiem i wybierz „Zmień skrót”."), Hotkeys.Format(saved)), ToolTipIcon.Warning);
         }
@@ -530,7 +530,7 @@ namespace DrawingBoardApp
             bool ok = Native.RegisterHotKey(hk.Handle, 1, mods, (uint)(k & Keys.KeyCode));
             string name = Hotkeys.Format(hotkey);
             drawItem.Text = Loc.T("Draw", "Rysuj") + " (" + name + ")";
-            icon.Text = "drawing-board (" + name + ")";
+            icon.Text = "Simple Drawing Pad (" + name + ")";   // NotifyIcon text: at most 63 characters
             return ok;
         }
 
@@ -545,7 +545,7 @@ namespace DrawingBoardApp
                 {
                     Apply(old);
                     MessageBox.Show(string.Format(Loc.T("The shortcut {0} is taken by another program. Choose a different one.",
-                        "Skrót {0} jest zajęty przez inny program. Wybierz inny."), Hotkeys.Format(d.Chosen)), "drawing-board", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        "Skrót {0} jest zajęty przez inny program. Wybierz inny."), Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(ConfigFile));
@@ -617,7 +617,7 @@ namespace DrawingBoardApp
         readonly Button ok = new Button();
         public HotkeyDialog(Keys current)
         {
-            Text = Loc.T("drawing-board: shortcut", "drawing-board: skrót");
+            Text = Loc.T("Simple Drawing Pad: shortcut", "Simple Drawing Pad: skrót");
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen; KeyPreview = true; ClientSize = new Size(380, 150);
             Label info = new Label(); info.Text = Loc.T("Press the new key combination (Ctrl and/or Alt + a key):", "Naciśnij nową kombinację klawiszy (Ctrl i/lub Alt + klawisz):");

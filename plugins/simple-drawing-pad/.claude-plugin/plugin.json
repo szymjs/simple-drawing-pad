@@ -1,11 +1,15 @@
 {
-  "name": "drawing-board",
-  "displayName": "drawing-board",
-  "version": "0.3.0",
+  "name": "simple-drawing-pad",
+  "displayName": "Simple Drawing Pad",
+  "version": "0.4.0",
   "description": "Sketch an idea by hand and let Claude look at it: a Windows pen window that opens with a keyboard shortcut (with a regular tablet the whole tablet draws), or an offline browser board on any system.",
   "author": {
     "name": "szymjs"
   },
+  "homepage": "https://github.com/szymjs/simple-drawing-pad",
+  "repository": "https://github.com/szymjs/simple-drawing-pad",
+  "supportUrl": "https://github.com/szymjs/simple-drawing-pad/issues",
+  "icon": "./icon.png",
   "license": "MIT",
   "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab"],
   "skills": "./skills/"
