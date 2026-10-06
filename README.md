@@ -6,13 +6,13 @@ A Claude Code plugin.
 
 Ctrl+Alt+D = draw\
 Enter = copy\
-Ctrl+V = paste.
+Ctrl+V = paste
 
 Simple as that. A small helper is built on your PC from the included source (nothing downloaded, no admin rights).
 
 Local only, no network, collects nothing. Starts with Windows. It asks once per computer before installing, and a short local check at each session start tells Claude if it works.
 
-Remove it in Windows Settings > Apps.
+Remove it in Windows Settings > Apps
 
 For Windows PCs only.
 
