@@ -9,7 +9,9 @@ Install the Simple Drawing Pad pen window on this Windows computer. The user ask
 
    `powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/app/install.ps1" -Autostart`
 
-3. Tell the user in one or two sentences that it is installed: press Ctrl+Alt+D to open the drawing window, Enter copies the drawing to the clipboard, Ctrl+V pastes it (for example in the chat). `/simple-drawing-pad:uninstall` removes it again.
+3. Tell the user in one or two sentences that it is installed: press the shortcut the installer names (Ctrl+Alt+D by default) to open the drawing window, Enter copies the drawing to the clipboard, Ctrl+V pastes it (for example in the chat). `/simple-drawing-pad:uninstall` removes it again. The program is installed on this computer only; on another computer they run this command there too.
+
+If the installer prints a WARNING that the shortcut is taken by another program, say so instead: the shortcut does not work until they right-click the Simple Drawing Pad icon in the notification area and choose "Change shortcut" ("Zmień skrót" in Polish Windows).
 
 If the installer says the drawing window is open, ask the user to close it (Enter or Esc) and run the command again.
 

@@ -21,8 +21,10 @@ In Claude Code:
 
 Or add it from the Claude directory. Start a new session afterwards, then:
 
-1. Run **`/simple-drawing-pad:install`** once to install the drawing window (`/simple-drawing-pad:uninstall` removes it).
+1. Run **`/simple-drawing-pad:install`** once **on each Windows computer** to install the drawing window (`/simple-drawing-pad:uninstall` removes it). The plugin comes with your Claude account; the drawing window is a program on the computer, so a new computer needs this step too.
 2. Press **Ctrl+Alt+D**, draw, press Enter, paste with **Ctrl+V**.
+
+If the drawing window is missing or not working on this computer, the plugin says so at the start of a new session.
 
 The skill is also available as `/simple-drawing-pad:draw` (on other systems it opens the offline browser board).
 
