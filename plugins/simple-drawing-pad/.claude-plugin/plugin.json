@@ -1,8 +1,8 @@
 {
   "name": "simple-drawing-pad",
   "displayName": "Simple Drawing Pad",
-  "version": "0.7.6",
-  "description": "Sketch an idea by hand and paste it to Claude or any app.\n\nCtrl+Alt+D = opens the drawing window\nEnter = saves to clipboard\nCtrl+V = pastes\n\nSimple as that. A small helper is built on your PC from the included source (nothing downloaded, no admin rights)\nlocal only, no network, collects nothing.\n\nStarts with Windows. It asks once per computer before installing, and a short local check at each session start tells Claude if it works.\n\nRemove it in Windows Settings > Apps.\n\nFor Windows PCs only.",
+  "version": "0.7.7",
+  "description": "Like dictation, but drawn: a quick sketch takes your idea to Claude or any app. Ctrl+Alt+D = draw · Enter = copy · Ctrl+V = paste. Simple as that. A small helper is built on your PC from the included source (nothing downloaded, no admin rights): local only, no network, collects nothing. Starts with Windows. It asks once per computer before installing, and a short local check at each session start tells Claude if it works. Remove it in Windows Settings > Apps. For Windows PCs only.",
   "author": {
     "name": "szymjs"
   },
