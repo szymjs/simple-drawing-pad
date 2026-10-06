@@ -11,7 +11,7 @@
       "name": "simple-drawing-pad",
       "source": "./plugins/simple-drawing-pad",
       "description": "For Windows PCs: sketch an idea by hand and paste it to Claude or any app. Ctrl+Alt+D opens the drawing window, Enter copies, Ctrl+V pastes. Simple as that. It uses a small, light helper program built on your computer from the included source code (nothing downloaded, no admin rights). The helper works only locally (no network, collects nothing), starts with Windows and keeps your last 10 drawings. It is easy to remove: Windows Settings > Apps, or /simple-drawing-pad:uninstall. The plugin asks once per computer before installing it, and a short local check at each session start tells Claude whether it works. On macOS and Linux only a simple offline browser board is available.",
-      "version": "0.7.1",
+      "version": "0.7.2",
       "license": "MIT",
       "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab", "windows"]
     }

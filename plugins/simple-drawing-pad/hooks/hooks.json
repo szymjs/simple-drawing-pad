@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/app/status.ps1\" -SessionStart; exit 0",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command '& (Join-Path $env:CLAUDE_PLUGIN_ROOT app/status.ps1) -SessionStart'; exit 0",
             "timeout": 20
           }
         ]
