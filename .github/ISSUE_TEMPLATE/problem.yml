@@ -1,0 +1,42 @@
+name: Problem
+description: Something does not work as described
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not attach drawings, screenshots or paths that show private information.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: Shown small in the drawing window's toolbar, and in Windows Settings > Apps > Simple Drawing Pad.
+      placeholder: 0.7.0
+  - type: dropdown
+    id: device
+    attributes:
+      label: What do you draw with?
+      options:
+        - Graphics tablet (for example Wacom)
+        - Pen display or touch screen
+        - Mouse
+        - Laptop trackpad
+        - Other
+  - type: textarea
+    id: check
+    attributes:
+      label: The plugin's check
+      description: Ask Claude "run the Simple Drawing Pad check" and paste the last lines here. Paths show your Windows user name; you can replace it with <name>.
+      render: text

@@ -40,6 +40,12 @@ The skill is also available as `/simple-drawing-pad:draw` (on other systems it o
 
 Keys, requirements and everything the program runs and stores: [plugins/simple-drawing-pad/README.md](plugins/simple-drawing-pad/README.md).
 
+## Feedback
+
+Questions, ideas or problems: [open an issue](https://github.com/szymjs/simple-drawing-pad/issues/new/choose) here on GitHub (a free GitHub account is needed). For a problem, the form asks for your Windows version, the plugin version and the last lines of the plugin's check; Claude can run the check for you. Tested with another tablet, pen display or touch screen? That helps too.
+
+Please do not attach drawings, screenshots or paths that show private information.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

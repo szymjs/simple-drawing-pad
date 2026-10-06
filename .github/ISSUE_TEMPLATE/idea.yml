@@ -1,0 +1,11 @@
+name: Idea or feedback
+description: A suggestion, a question, or how it works for you
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea or feedback
+      description: Tested with a tablet, pen display or touch screen that is not listed in the README yet? Tell us which one and how it went.
+    validations:
+      required: true
