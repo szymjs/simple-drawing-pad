@@ -9,7 +9,7 @@
 //                                       the tray menu, kept in %APPDATA%\simple-drawing-pad\hotkey.txt) opens the board
 // Output: %LOCALAPPDATA%\simple-drawing-pad\drawings\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt);
 //         Esc: ...\drawings\cancelled\. A drawing is a quick note for Claude, not an archive: the folder stays on this
-//         computer (never in Pictures, which OneDrive may sync to other computers) and keeps the last 30 drawings.
+//         computer (never in Pictures, which OneDrive may sync to other computers) and keeps the last 10 drawings.
 //         Every close writes ...\drawings\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
 // Helper: --tray writes %LOCALAPPDATA%\simple-drawing-pad\helper.txt whenever it registers its shortcut:
 //         ok | taken, shortcut, process id, local time. status.ps1 reads it.
@@ -491,7 +491,7 @@ namespace SimpleDrawingPadApp
         // keeps the newest Keep drawings in a folder; the names sort by time (drawing_yyyyMMdd_HHmmss.png, Gregorian).
         // The drawing just saved is never deleted, even if its name sorts first (the clock was set back).
         // Never fails the save: a file that cannot be deleted now is left for the next time.
-        const int Keep = 30;
+        const int Keep = 10;
         static void Prune(string folder, string justSaved)
         {
             try

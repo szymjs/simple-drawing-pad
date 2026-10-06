@@ -140,8 +140,8 @@ try {
                     (L "Simple Drawing Pad - a one-time question on this computer.`n" "Simple Drawing Pad – jednorazowe pytanie na tym komputerze.`n") +
                     (L "This plugin works together with a small helper program on this computer: an icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app.`n" `
                        "Ta wtyczka działa razem z małym programem na tym komputerze: ikoną przy zegarze (pod ^, jeśli Windows ją ukryje), która po naciśnięciu $hk otwiera okno do rysowania. Enter kopiuje rysunek, Ctrl+V wkleja go w czacie albo w dowolnym innym programie.`n") +
-                    (L "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows and keeps only your last 30 drawings, on this computer, in %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall removes it.`n" `
-                       "Program działa wyłącznie lokalnie: nie korzysta z sieci, niczego nie wysyła i niczego nie zbiera. Powstaje z kodu dołączonego do wtyczki (nic nie jest pobierane, bez uprawnień administratora), uruchamia się razem z Windows i przechowuje tylko 30 ostatnich rysunków, na tym komputerze, w %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall go usuwa.`n") +
+                    (L "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows and keeps only your last 10 drawings, on this computer, in %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall removes it.`n" `
+                       "Program działa wyłącznie lokalnie: nie korzysta z sieci, niczego nie wysyła i niczego nie zbiera. Powstaje z kodu dołączonego do wtyczki (nic nie jest pobierane, bez uprawnień administratora), uruchamia się razem z Windows i przechowuje tylko 10 ostatnich rysunków, na tym komputerze, w %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall go usuwa.`n") +
                     (L "To install it, answer ""yes"" to Claude or run /simple-drawing-pad:install. This question is not shown again on this computer." `
                        "Aby go zainstalować, odpowiedz Claude'owi `„tak`” albo wpisz /simple-drawing-pad:install. To pytanie nie pojawi się ponownie na tym komputerze.")   # `„ `”: PowerShell would end the string at „ or ”
                 }
@@ -161,7 +161,7 @@ try {
             'The user has just been shown a one-time question, in the session-start message, whether to install it; it is not shown again. ' +
             "If the user agrees (for example answers yes or tak) or asks for it, install it now with exactly: $install ; then run $check and tell the user in one or two sentences whether it works. " +
             'If their first message is about something else, end your reply with one short sentence offering the installation; if they decline or ignore it, do not bring it up again. ' +
-            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only the last 30 drawings in %LOCALAPPDATA%\simple-drawing-pad, and /simple-drawing-pad:uninstall removes it."
+            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only the last 10 drawings in %LOCALAPPDATA%\simple-drawing-pad, and /simple-drawing-pad:uninstall removes it."
         } elseif ($tell) {
             "Simple Drawing Pad plugin, pen window status on this Windows computer: $state. $todo The user has just been shown this once. If they want to draw or ask about it, offer the fix; ask before installing."
         } else {
@@ -179,7 +179,7 @@ try {
                           default { "$_ running (processes $(($helpers | ForEach-Object { $_.ProcessId }) -join ', ')); /simple-drawing-pad:install restarts one" } })
     'Shortcut:  ' + $(switch ($shortcut) { 'ok' { "$hk works" } 'taken' { "$hk is taken by another program" } default { "$hk (not reported by the helper)" } })
     'Autostart: ' + $(if ($autostart) { 'on' } else { 'off (the helper does not start by itself after a restart)' })
-    'Drawings:  ' + (Join-Path $data 'drawings') + ' (this computer only, the last 30 are kept)'
+    'Drawings:  ' + (Join-Path $data 'drawings') + ' (this computer only, the last 10 are kept)'
     if ($outdated) { 'Update:    this plugin version comes with an updated helper program' }
     if ($ahead) { "Version:   the installed program is newer ($ahead); nothing to do" }
     if ($shown) { "Notice:    already shown on this computer ($($shown.Split(' ')[0])); not shown again" }

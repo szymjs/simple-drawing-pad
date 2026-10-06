@@ -114,4 +114,4 @@ if ($report -and $report[0].Trim() -eq 'taken') {
 } else {
     "Press $hk to draw (change it from the tray icon menu). Enter copies to the clipboard, Ctrl+V pastes, Esc cancels."
 }
-"Drawings stay on this computer in $(Join-Path $data 'drawings') (the last 30 are kept). The program does not use the network."
+"Drawings stay on this computer in $(Join-Path $data 'drawings') (the last 10 are kept). The program does not use the network."

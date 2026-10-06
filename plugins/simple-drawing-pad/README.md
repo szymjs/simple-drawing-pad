@@ -17,7 +17,7 @@ On Windows the pen window is a **small helper program on your computer**: an ico
 - **Only local.** The helper does not use the network: it sends nothing and collects nothing. It is a local module the plugin and Claude use on this computer.
 - **Built from the included source** (`app/SimpleDrawingPad.cs`) by the C# compiler that is part of Windows. Nothing is downloaded, no administrator rights.
 - **Starts with Windows** (a per-user autostart entry), so the shortcut works after a restart.
-- **Keeps only your last 30 drawings, on this computer**, in `%LOCALAPPDATA%\simple-drawing-pad\drawings`, never in a synced folder. A drawing is a quick note, not an archive; the clipboard holds the one you paste. (Windows' own clipboard history and its sync, if you turned them on, are Windows features.)
+- **Keeps only your last 10 drawings, on this computer**, in `%LOCALAPPDATA%\simple-drawing-pad\drawings`, never in a synced folder. A drawing is a quick note, not an archive; the clipboard holds the one you paste. (Windows' own clipboard history and its sync, if you turned them on, are Windows features.)
 - **`/simple-drawing-pad:uninstall` removes it**; your drawings and the shortcut setting are kept.
 
 ## Install
@@ -75,7 +75,7 @@ An empty sheet is never copied. While the window is active in tablet mode the po
 - With `-Autostart` it adds a per-user autostart value `simple-drawing-pad` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` that starts `SimpleDrawingPad.exe --tray` at logon.
 - Next to the program, `install.ps1` writes `source.sha256` (a hash of the source it was built from) and `version.txt` (the plugin version), so the check can tell when a plugin update brings a newer program, and an older copy of the plugin never asks to put its older program back.
 - Drawings and the plugin's state are kept on this computer only, in `%LOCALAPPDATA%\simple-drawing-pad` (Local AppData never roams or syncs):
-  - `drawings\`: each copied drawing as a time-stamped PNG, with `latest.png`, `latest.txt` (path of the newest drawing) and `status.txt` (result of the last session: copied, cancelled or empty); cancelled drawings in `drawings\cancelled`. The last 30 of each are kept; older ones are deleted when you save a new one.
+  - `drawings\`: each copied drawing as a time-stamped PNG, with `latest.png`, `latest.txt` (path of the newest drawing) and `status.txt` (result of the last session: copied, cancelled or empty); cancelled drawings in `drawings\cancelled`. The last 10 of each are kept; older ones are deleted when you save a new one.
   - `helper.txt`: written by the helper each time it registers its shortcut (whether it could, which shortcut, its process id, the time), deleted when it exits.
   - `notice.txt`: which session-start notice was already shown, so each one appears only once.
 - `app/status.ps1` reads whether the program is installed, whether its helper is running, `helper.txt`, the autostart value, `source.sha256` and `version.txt`; on its own it changes nothing.
