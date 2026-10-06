@@ -1,6 +1,6 @@
 ---
 name: draw
-description: Let the user sketch an idea by hand (layout, wiring, UI mockup, diagram, handwriting) and look at the drawing. On Windows, Ctrl+Alt+D opens the drawing window (with a graphics tablet, the whole tablet is the drawing area); Enter copies the drawing to the clipboard and the user pastes it with Ctrl+V. Elsewhere an offline browser board is used. Use when the user wants to draw, sketch or show something by hand.
+description: Let the user sketch an idea by hand (layout, wiring, UI mockup, diagram, handwriting) and look at the drawing. On Windows, after a one-time /simple-drawing-pad:install on each computer, Ctrl+Alt+D opens the drawing window (with a graphics tablet, the whole tablet is the drawing area); Enter copies the drawing to the clipboard and the user pastes it with Ctrl+V. Elsewhere an offline browser board is used. Use when the user wants to draw, sketch or show something by hand, or asks why the drawing shortcut does nothing.
 ---
 
 # Simple Drawing Pad
@@ -8,7 +8,13 @@ description: Let the user sketch an idea by hand (layout, wiring, UI mockup, dia
 ## Pen window (Windows)
 The program is in the plugin's `app` folder, i.e. `../../app` relative to this skill's folder (source `SimpleDrawingPad.cs`, built by the C# compiler that ships with Windows, nothing downloaded, no admin rights).
 
-- **Install once:** the user runs `/simple-drawing-pad:install` (and `/simple-drawing-pad:uninstall` to remove it). If the pen window is not installed yet, suggest that command; install yourself only after asking the user:
+- **Check first:** the plugin comes with the user's Claude account, but the program is installed separately on each Windows computer, so on a new computer the shortcut does nothing yet. Before telling the user to press the shortcut, and whenever they say it does nothing, run this read-only check and follow its last line, `Result: <state>: <what to do>`:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File "<plugin folder>\app\status.ps1"`
+  - `ready`: tell them the shortcut it names.
+  - `not-installed`, `not-running` or `update-available`: suggest `/simple-drawing-pad:install` (it also restarts the helper and updates the program), or the browser board below.
+  - `shortcut-taken`: another program owns the shortcut; tell them to right-click the Simple Drawing Pad icon in the notification area and choose "Change shortcut" ("Zmień skrót" in Polish Windows).
+  At the start of a session the plugin's hook runs the same check and already tells the user when something is wrong (except a missing or stopped program on a computer where they ran `/simple-drawing-pad:uninstall`).
+- **Install once per computer:** the user runs `/simple-drawing-pad:install` (and `/simple-drawing-pad:uninstall` to remove it). Install yourself only after asking the user:
   `powershell -NoProfile -ExecutionPolicy Bypass -File "<plugin folder>\app\install.ps1" [-Autostart] [-Uninstall]`
   It builds the program, installs it to `%LOCALAPPDATA%\Programs\simple-drawing-pad` and starts the shortcut helper (tray icon). `-Autostart` also starts the helper at every logon (a per-user Run entry in the registry); `-Uninstall` removes the program and autostart and keeps the drawings.
 - **Working from the cloud** (you reach the user's computer through the Claude app instead of running commands on it): ask for a new, empty folder for the installer, such as `C:\Users\<name>\simple-drawing-pad`, not Downloads, copy the plugin's `app` folder there and run its `install.ps1`.

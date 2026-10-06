@@ -1,0 +1,17 @@
+{
+  "description": "At the start of a new session on Windows, says in one line if the pen window is not installed or not working on this computer. Read-only; silent when all is well and on other systems.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/app/status.ps1\" -SessionStart; exit 0",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

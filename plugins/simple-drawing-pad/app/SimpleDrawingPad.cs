@@ -9,6 +9,9 @@
 // Output: <Pictures>\simple-drawing-pad\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt); Esc: ...\cancelled\
 //         <Pictures> is the Pictures known folder (it may be redirected).
 //         Every close writes <Pictures>\simple-drawing-pad\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
+// Helper: --tray writes %LOCALAPPDATA%\simple-drawing-pad\helper.txt whenever it registers its shortcut:
+//         ok | taken, shortcut, process id, local time. status.ps1 reads it. It is kept out of <Pictures>, which
+//         may be synced to other computers (OneDrive), because it describes this computer only.
 // Build:  build.ps1 (uses the C# compiler that ships with Windows / .NET Framework 4)
 using System;
 using System.Collections.Generic;
@@ -523,6 +526,9 @@ namespace SimpleDrawingPadApp
 
         // the shortcut is stored as text ("Ctrl+Alt+D") in %APPDATA%\simple-drawing-pad\hotkey.txt
         static readonly string ConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "simple-drawing-pad", "hotkey.txt");
+        // whether the shortcut works, for status.ps1 (Claude cannot see the balloon tip): ok | taken, shortcut, process id, local time
+        static readonly string StateFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "simple-drawing-pad", "helper.txt");
+        static readonly string Pid = System.Diagnostics.Process.GetCurrentProcess().Id.ToString();
         const Keys DefaultHotkey = Keys.Control | Keys.Alt | Keys.D;
 
         public TrayContext()
@@ -558,7 +564,29 @@ namespace SimpleDrawingPadApp
             BoardForm.HotkeyName = name;
             drawItem.Text = Loc.T("Draw", "Rysuj") + " (" + name + ")";
             icon.Text = "Simple Drawing Pad (" + name + ")";   // NotifyIcon text: at most 63 characters
+            WriteState(ok, name);
             return ok;
+        }
+
+        // a failed write only means status.ps1 cannot tell whether the shortcut works; the helper keeps running
+        static void WriteState(bool ok, string name)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(StateFile));
+                File.WriteAllText(StateFile, (ok ? "ok" : "taken") + Environment.NewLine + name + Environment.NewLine + Pid + Environment.NewLine + DateTime.Now.ToString("o") + Environment.NewLine);
+            }
+            catch (Exception) { }
+        }
+        // on exit the file goes away, unless another helper has written it since
+        static void RemoveState()
+        {
+            try
+            {
+                string[] lines = File.ReadAllLines(StateFile);
+                if (lines.Length > 2 && lines[2] == Pid) File.Delete(StateFile);
+            }
+            catch (Exception) { }
         }
 
         void ChangeHotkey()
@@ -606,6 +634,7 @@ namespace SimpleDrawingPadApp
         protected override void ExitThreadCore()
         {
             Native.UnregisterHotKey(hk.Handle, 1);
+            RemoveState();
             icon.Visible = false; icon.Dispose(); hk.DestroyHandle();
             base.ExitThreadCore();
         }
