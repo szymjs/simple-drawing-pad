@@ -8,13 +8,13 @@ Sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) a
 - **Pen window (Windows).** A keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws on the sheet, with pressure, while the window is active. On pen displays and touch laptops it draws where the pen is; with no tablet it uses the mouse or trackpad. Enter copies the drawing to the clipboard and closes the window, so you can paste it into Claude, an email or any other app with Ctrl+V. In Claude Code, Claude can also pick it up by itself.
 - **Browser board (any system).** `skills/draw/assets/simple-drawing-pad.html` is one offline page with pen pressure, eraser, line widths, grid, undo, full screen and PNG export.
 
-The plugin is code and text only: no pictures or other binary files.
+The plugin is code and text, plus one picture: the pencil icon for its directory listing, which no code reads.
 
 ## What runs on your computer
 
 On Windows the pen window is a **small helper program on your computer**: a pencil icon by the clock (Windows may hide it under ^) that opens the drawing window when you press the shortcut. The plugin comes with your Claude account; the helper is installed once on each computer, and only when you agree.
 
-- **The pencil icon is Simple Drawing Pad.** The program draws this icon itself (there is no image file), and the same pencil marks it by the clock, in Task Manager and in Windows Settings > Apps, so you can always tell what is running. Right-click it for Draw, Change shortcut and Exit.
+- **The pencil icon is Simple Drawing Pad.** The program draws this icon itself, and the same pencil marks it by the clock, in Task Manager and in Windows Settings > Apps, so you can always tell what is running. Right-click it for Draw, Change shortcut and Exit.
 - **Only local.** The helper does not use the network: it sends nothing and collects nothing. It is a local module the plugin and Claude use on this computer. It does not watch your keyboard either: Windows tells it only when its own shortcut is pressed, and keys reach it only while its drawing window is active.
 - **Built from the included source** (`app/SimpleDrawingPad.cs`) by the C# compiler that is part of Windows. Nothing is downloaded, no administrator rights.
 - **Starts with Windows** (a per-user autostart entry), so the shortcut works after a restart.
@@ -61,7 +61,7 @@ An empty sheet is never copied. While the window is active in tablet mode the po
 ## What it runs and stores
 
 - `/simple-drawing-pad:install` and `/simple-drawing-pad:uninstall` only ask Claude to run `install.ps1 -Autostart` or `install.ps1 -Uninstall` (which runs `uninstall.ps1`); Claude Code asks you to approve the command first.
-- `install.ps1` builds `SimpleDrawingPad.exe` from the included source (`app/SimpleDrawingPad.cs`) with the Windows C# compiler `csc.exe` into `app\bin\` inside the plugin folder (twice: the second build adds the pencil icon, which the program's own code draws, so Windows shows it in Settings > Apps and Task Manager), copies it to `%LOCALAPPDATA%\Programs\simple-drawing-pad` and starts it in the notification area. It stops a running Simple Drawing Pad helper first; if the build fails, it starts the installed one again.
+- `install.ps1` builds `SimpleDrawingPad.exe` from the included source (`app/SimpleDrawingPad.cs`) with the Windows C# compiler `csc.exe` into `app\bin\` inside the plugin folder (the build script also draws the pencil icon, the same drawing as the tray icon, into the program file, so Windows shows it in Settings > Apps and Task Manager), copies it to `%LOCALAPPDATA%\Programs\simple-drawing-pad` and starts it in the notification area. It stops a running Simple Drawing Pad helper first; if the build fails, it starts the installed one again.
 - With `-Autostart` it adds a per-user autostart value `simple-drawing-pad` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` that starts `SimpleDrawingPad.exe --tray` at logon.
 - It lists the program in Windows Settings > Apps with a per-user entry `simple-drawing-pad` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` (name, version, icon, folder, size). Its Uninstall button runs the copy of `uninstall.ps1` next to the program: the same steps as `/simple-drawing-pad:uninstall`, so it also works after the plugin is removed from Claude, and a small message window tells you the result.
 - Next to the program, `install.ps1` writes `source.sha256` (a hash of the program's source and its build and uninstall scripts) and `version.txt` (the plugin version), so the check can tell when a plugin update brings a newer program, and an older copy of the plugin never asks to put its older program back.
