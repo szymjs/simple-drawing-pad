@@ -1,7 +1,7 @@
 {
   "name": "simple-drawing-pad",
   "displayName": "Simple Drawing Pad",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Sketch an idea by hand and paste it to Claude or any app. On Windows it needs a small helper program on your computer: built from the included source (nothing downloaded, no admin rights), it starts with Windows, works only locally (no network, collects nothing) and keeps your last 10 drawings; /simple-drawing-pad:uninstall removes it. The plugin asks once per computer before installing it. Then Ctrl+Alt+D opens the drawing window, Enter copies, Ctrl+V pastes. Simple as that.",
   "author": {
     "name": "szymjs"

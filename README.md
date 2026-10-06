@@ -10,7 +10,7 @@ A Claude Code plugin: sketch an idea by hand (a layout, wiring, a UI mockup, a d
 - **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it; a mouse or trackpad works too. Enter copies the drawing to the clipboard; paste it with Ctrl+V.
 - **Browser board (any system):** one offline page with pen pressure, eraser, undo and PNG export.
 
-**What runs on your computer:** on Windows the pen window is a small helper program (an icon by the clock), installed once per computer and only when you agree. It works only locally: no network, it sends nothing and collects nothing. It is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only your last 10 drawings on this computer, and `/simple-drawing-pad:uninstall` removes it.
+**What runs on your computer:** on Windows the pen window is a small helper program (a pencil icon by the clock), installed once per computer and only when you agree. It works only locally: no network, it sends nothing and collects nothing. It is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only your last 10 drawings on this computer, and `/simple-drawing-pad:uninstall` removes it.
 
 ## Install
 

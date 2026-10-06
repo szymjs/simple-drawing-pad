@@ -12,7 +12,7 @@ Sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) a
 
 ## What runs on your computer
 
-On Windows the pen window is a **small helper program on your computer**: an icon by the clock (Windows may hide it under ^) that opens the drawing window when you press the shortcut. The plugin comes with your Claude account; the helper is installed once on each computer, and only when you agree.
+On Windows the pen window is a **small helper program on your computer**: a pencil icon by the clock (Windows may hide it under ^) that opens the drawing window when you press the shortcut. The plugin comes with your Claude account; the helper is installed once on each computer, and only when you agree.
 
 - **Only local.** The helper does not use the network: it sends nothing and collects nothing. It is a local module the plugin and Claude use on this computer.
 - **Built from the included source** (`app/SimpleDrawingPad.cs`) by the C# compiler that is part of Windows. Nothing is downloaded, no administrator rights.

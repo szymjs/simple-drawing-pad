@@ -83,6 +83,43 @@ namespace SimpleDrawingPadApp
         public static string T(string en, string pl) { return Pl ? pl : en; }
     }
 
+    // the program's icon: a pencil (the board's black and orange) on a white tile with a grey edge, so it shows on
+    // dark and light taskbars. Drawn at the size Windows uses, so it stays sharp at any display scaling; no image file.
+    static class AppIcon
+    {
+        static Icon small, large;
+        public static Icon Small { get { return small ?? (small = Make(SystemInformation.SmallIconSize.Width)); } }   // tray
+        public static Icon Large { get { return large ?? (large = Make(SystemInformation.IconSize.Width)); } }        // windows, Alt+Tab
+        public static Icon Make(int size)
+        {
+            using (Bitmap b = new Bitmap(size, size, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(b))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias; g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    float s = size, r = s * 0.22f, e = Math.Max(1f, s / 24f), w = s - e;
+                    using (GraphicsPath tile = new GraphicsPath())
+                    {
+                        tile.AddArc(e / 2, e / 2, 2 * r, 2 * r, 180, 90); tile.AddArc(w - 2 * r, e / 2, 2 * r, 2 * r, 270, 90);
+                        tile.AddArc(w - 2 * r, w - 2 * r, 2 * r, 2 * r, 0, 90); tile.AddArc(e / 2, w - 2 * r, 2 * r, 2 * r, 90, 90); tile.CloseFigure();
+                        g.FillPath(Brushes.White, tile);
+                        using (Pen edge = new Pen(Color.FromArgb(140, 140, 140), e)) g.DrawPath(edge, tile);
+                    }
+                    // the pencil points to the lower left: body, wood tip, lead
+                    g.TranslateTransform(s / 2, s / 2); g.RotateTransform(135);
+                    float len = s * 0.86f, pw = s * 0.24f, x0 = -len / 2 + len * 0.68f;
+                    using (Brush ink = new SolidBrush(Color.FromArgb(29, 29, 31))) using (Brush wood = new SolidBrush(Color.FromArgb(234, 138, 0)))
+                    {
+                        g.FillRectangle(ink, -len / 2, -pw / 2, len * 0.68f, pw);
+                        g.FillPolygon(wood, new PointF[] { new PointF(x0, -pw / 2), new PointF(x0 + len * 0.32f, 0), new PointF(x0, pw / 2) });
+                        g.FillPolygon(ink, new PointF[] { new PointF(x0 + len * 0.21f, -pw * 0.17f), new PointF(x0 + len * 0.32f, 0), new PointF(x0 + len * 0.21f, pw * 0.17f) });
+                    }
+                }
+                return Icon.FromHandle(b.GetHicon());   // made once per size and kept while the program runs
+            }
+        }
+    }
+
     class Stroke
     {
         public Color Color; public float Width; public bool Eraser;
@@ -128,6 +165,7 @@ namespace SimpleDrawingPadApp
                          "Enter kopiuje do schowka  ·  Ctrl+V wkleja w czacie lub dowolnym programie");
             KeyPreview = true;
             DoubleBuffered = true;
+            Icon = AppIcon.Large;
             BackColor = Color.FromArgb(247, 247, 244);
             StartPosition = FormStartPosition.Manual;
             Screen scr = Screen.FromPoint(Cursor.Position);
@@ -550,7 +588,7 @@ namespace SimpleDrawingPadApp
 
         public TrayContext()
         {
-            icon.Icon = SystemIcons.Application;
+            icon.Icon = AppIcon.Small;
             ContextMenu menu = new ContextMenu();
             drawItem = menu.MenuItems.Add(Loc.T("Draw", "Rysuj"), delegate { OpenBoard(); });
             menu.MenuItems.Add(Loc.T("Change shortcut…", "Zmień skrót…"), delegate { ChangeHotkey(); });
@@ -699,6 +737,7 @@ namespace SimpleDrawingPadApp
         public HotkeyDialog(Keys current)
         {
             Text = Loc.T("Simple Drawing Pad: shortcut", "Simple Drawing Pad: skrót");
+            Icon = AppIcon.Large;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen; KeyPreview = true; ClientSize = new Size(380, 150);
             Label info = new Label(); info.Text = Loc.T("Press the new key combination (Ctrl and/or Alt + a key):", "Naciśnij nową kombinację klawiszy (Ctrl i/lub Alt + klawisz):");

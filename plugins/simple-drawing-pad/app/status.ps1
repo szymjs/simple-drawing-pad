@@ -138,8 +138,8 @@ try {
             $tell = switch ($state) {
                 'not-installed' {
                     (L "Simple Drawing Pad - a one-time question on this computer.`n" "Simple Drawing Pad – jednorazowe pytanie na tym komputerze.`n") +
-                    (L "This plugin works together with a small helper program on this computer: an icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app.`n" `
-                       "Ta wtyczka działa razem z małym programem na tym komputerze: ikoną przy zegarze (pod ^, jeśli Windows ją ukryje), która po naciśnięciu $hk otwiera okno do rysowania. Enter kopiuje rysunek, Ctrl+V wkleja go w czacie albo w dowolnym innym programie.`n") +
+                    (L "This plugin works together with a small helper program on this computer: a pencil icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app.`n" `
+                       "Ta wtyczka działa razem z małym programem na tym komputerze: ikoną ołówka przy zegarze (pod ^, jeśli Windows ją ukryje), która po naciśnięciu $hk otwiera okno do rysowania. Enter kopiuje rysunek, Ctrl+V wkleja go w czacie albo w dowolnym innym programie.`n") +
                     (L "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows and keeps only your last 10 drawings, on this computer, in %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall removes it.`n" `
                        "Program działa wyłącznie lokalnie: nie korzysta z sieci, niczego nie wysyła i niczego nie zbiera. Powstaje z kodu dołączonego do wtyczki (nic nie jest pobierane, bez uprawnień administratora), uruchamia się razem z Windows i przechowuje tylko 10 ostatnich rysunków, na tym komputerze, w %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall go usuwa.`n") +
                     (L "To install it, answer ""yes"" to Claude or run /simple-drawing-pad:install. This question is not shown again on this computer." `
@@ -147,8 +147,8 @@ try {
                 }
                 'not-running' { L "Simple Drawing Pad: the helper program is installed but not running, so $hk does nothing. /simple-drawing-pad:install starts it again. (Shown once.)" `
                                   "Simple Drawing Pad: program jest zainstalowany, ale nie działa w tle, więc $hk nic nie robi. /simple-drawing-pad:install uruchomi go ponownie. (Ten komunikat pojawia się raz.)" }
-                'shortcut-taken' { L "Simple Drawing Pad: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad icon by the clock (under ^ if hidden) and choose ""Change shortcut"". (Shown once.)" `
-                                     "Simple Drawing Pad: skrót $hk jest zajęty przez inny program, więc nie otwiera okna do rysowania. Kliknij prawym przyciskiem ikonę Simple Drawing Pad przy zegarze (pod ^, jeśli ukryta) i wybierz `„Zmień skrót`”. (Ten komunikat pojawia się raz.)" }
+                'shortcut-taken' { L "Simple Drawing Pad: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad pencil icon by the clock (under ^ if hidden) and choose ""Change shortcut"". (Shown once.)" `
+                                     "Simple Drawing Pad: skrót $hk jest zajęty przez inny program, więc nie otwiera okna do rysowania. Kliknij prawym przyciskiem ikonę ołówka Simple Drawing Pad przy zegarze (pod ^, jeśli ukryta) i wybierz `„Zmień skrót`”. (Ten komunikat pojawia się raz.)" }
                 'update-available' { L "Simple Drawing Pad: this plugin version comes with an updated helper program. /simple-drawing-pad:install updates it in a few seconds. (Shown once.)" `
                                        "Simple Drawing Pad: ta wersja wtyczki ma zaktualizowany program. /simple-drawing-pad:install zaktualizuje go w kilka sekund. (Ten komunikat pojawia się raz.)" }
             }
