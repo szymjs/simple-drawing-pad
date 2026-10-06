@@ -1,8 +1,9 @@
-# Installs the Simple Drawing Pad pen window for the current Windows user. No downloads, no admin rights.
+# Installs the Simple Drawing Pad pen window for the current Windows user. No downloads, no admin rights, and the
+# program it builds works only on this computer (no network access).
 #   .\install.ps1              build, install to %LOCALAPPDATA%\Programs\simple-drawing-pad, start the shortcut helper
 #   .\install.ps1 -Autostart   the same, plus start the helper at every Windows logon (HKCU ...\CurrentVersion\Run value)
 #   .\install.ps1 -Uninstall   stop the helper and remove what this script installed (drawings are kept)
-# status.ps1 (read-only) says whether it is installed and works.
+# status.ps1 says whether it is installed and works.
 param([switch]$Autostart, [switch]$Uninstall)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -10,8 +11,11 @@ $dir = Join-Path $env:LOCALAPPDATA 'Programs\simple-drawing-pad'
 $exe = Join-Path $dir 'SimpleDrawingPad.exe'
 $bin = Join-Path $here 'bin\SimpleDrawingPad.exe'
 $hashFile = Join-Path $dir 'source.sha256'                                  # which source the program was built from (status.ps1)
-$stateFile = Join-Path $env:LOCALAPPDATA 'simple-drawing-pad\helper.txt'    # the helper's report: ok | taken, shortcut, process id, time
-$offFile = Join-Path $env:LOCALAPPDATA 'simple-drawing-pad\no-reminder.txt' # after -Uninstall: no session-start reminder (status.ps1)
+$versionFile = Join-Path $dir 'version.txt'                                 # which plugin version built it (status.ps1)
+$data = Join-Path $env:LOCALAPPDATA 'simple-drawing-pad'
+$stateFile = Join-Path $data 'helper.txt'                                   # the helper's report: ok | taken, shortcut, process id, time
+$noticeFile = Join-Path $data 'notice.txt'                                  # the session-start notice already shown here (status.ps1)
+$offFile = Join-Path $data 'no-reminder.txt'                                # 0.5.0's version of "already asked"; replaced by notice.txt
 $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 # previous name of this program (up to 0.3.0). Only its running helper and its Run value are touched, and only when
 # they point to exactly this file; its files, drawings and shortcut setting are left in place.
@@ -53,24 +57,38 @@ if ($Uninstall) {
     Stop-Helper
     Remove-ItemProperty -LiteralPath $run -Name 'simple-drawing-pad' -ErrorAction SilentlyContinue
     [void](Remove-LegacyAutostart)
-    if (Test-Path -LiteralPath $exe) { Remove-Item -LiteralPath $exe }
-    if (Test-Path -LiteralPath $hashFile) { Remove-Item -LiteralPath $hashFile }
+    foreach ($f in $exe, $hashFile, $versionFile, $stateFile) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
     if ((Test-Path -LiteralPath $dir) -and -not (Get-ChildItem -LiteralPath $dir -Force)) { Remove-Item -LiteralPath $dir }
-    if (Test-Path -LiteralPath $stateFile) { Remove-Item -LiteralPath $stateFile }
-    # removed on purpose: the plugin's session-start check stops reminding to install it on this computer
-    New-Item -ItemType Directory -Force (Split-Path -Parent $offFile) | Out-Null
+    # removed on purpose: counts as "already asked", so the session-start question does not come back on this computer;
+    # no-reminder.txt says the same to a 0.5.0 copy of the plugin that may still be in another Claude app
+    New-Item -ItemType Directory -Force $data | Out-Null
+    [IO.File]::WriteAllText($noticeFile, 'not-installed')
     [IO.File]::WriteAllText($offFile, "Written by /simple-drawing-pad:uninstall. While this file exists, the plugin does not remind you at session start that the drawing window is missing. /simple-drawing-pad:install deletes it.`r`n")
-    "Simple Drawing Pad removed. Your drawings in Pictures\simple-drawing-pad and the shortcut setting in %APPDATA%\simple-drawing-pad are kept."
-    "The plugin no longer reminds you at session start on this computer; /simple-drawing-pad:install turns the reminder on again."
+    "Simple Drawing Pad removed. Your drawings in %LOCALAPPDATA%\simple-drawing-pad\drawings (older ones in Pictures\simple-drawing-pad) and the shortcut setting in %APPDATA%\simple-drawing-pad are kept."
+    "The plugin will not ask about the drawing window again on this computer; /simple-drawing-pad:install installs it again."
     return
 }
 
+# an older copy of the plugin (for example in another Claude app that has not updated yet) must not put its older
+# program over a newer one: then the installed program is kept and only started
+$version = ''
+try { $version = [string](Get-Content -Raw -LiteralPath (Join-Path $here '..\.claude-plugin\plugin.json') | ConvertFrom-Json).version } catch { }
+$installedVersion = if (Test-Path -LiteralPath $versionFile) { [IO.File]::ReadAllText($versionFile).Trim() } else { '' }
+$a = $null; $b = $null
+$keep = (Test-Path -LiteralPath $exe) -and [version]::TryParse($version, [ref]$a) -and [version]::TryParse($installedVersion, [ref]$b) -and $b -gt $a
+
 Stop-Helper   # before the build, so a helper started from bin\ cannot lock the build output
-& (Join-Path $here 'build.ps1')
-New-Item -ItemType Directory -Force $dir | Out-Null
-Copy-Item -LiteralPath $bin -Destination $exe -Force
-[IO.File]::WriteAllText($hashFile, (Get-SourceHash (Join-Path $here 'SimpleDrawingPad.cs')))
-if (Test-Path -LiteralPath $offFile) { Remove-Item -LiteralPath $offFile }   # installed again: the reminder is back on
+if ($keep) {
+    "The installed program ($installedVersion) is newer than this copy of the plugin ($version), so it is kept and only started."
+} else {
+    & (Join-Path $here 'build.ps1')
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    Copy-Item -LiteralPath $bin -Destination $exe -Force
+    [IO.File]::WriteAllText($hashFile, (Get-SourceHash (Join-Path $here 'SimpleDrawingPad.cs')))   # one line: 0.5.0 compares the whole file
+    if ($version) { [IO.File]::WriteAllText($versionFile, $version) } elseif (Test-Path -LiteralPath $versionFile) { Remove-Item -LiteralPath $versionFile }
+}
+# installed (again): start fresh, so a later problem gets its one session-start notice
+foreach ($f in $noticeFile, $offFile) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
 $legacyAutostart = Remove-LegacyAutostart   # else the previous version's helper starts again at logon
 if ($Autostart) {
     New-ItemProperty -LiteralPath $run -Name 'simple-drawing-pad' -Value ('"' + $exe + '" --tray') -PropertyType String -Force | Out-Null
@@ -96,3 +114,4 @@ if ($report -and $report[0].Trim() -eq 'taken') {
 } else {
     "Press $hk to draw (change it from the tray icon menu). Enter copies to the clipboard, Ctrl+V pastes, Esc cancels."
 }
+"Drawings stay on this computer in $(Join-Path $data 'drawings') (the last 30 are kept). The program does not use the network."

@@ -1,5 +1,5 @@
 {
-  "description": "At the start of a new session on Windows, says in one line if the pen window is not installed or not working on this computer. Read-only; silent when all is well and on other systems.",
+  "description": "At the start of a new session on Windows: asks once per computer whether to install the local helper program, and says once if it stops working. Silent when all is well and on other systems.",
   "hooks": {
     "SessionStart": [
       {

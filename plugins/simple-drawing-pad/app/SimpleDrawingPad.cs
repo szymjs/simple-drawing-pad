@@ -2,16 +2,17 @@
 // surface draws into it (Wintab), regardless of how the tablet is mapped to the monitors. That is for regular
 // (opaque) tablets; pen displays and touch screens use the normal pointer and draw where the pen is.
 // Closing the window saves the sheet as PNG (and copies it to the clipboard) for Claude to read.
+// It works only on this computer: no network access, nothing is sent or collected.
 //
 // Usage:  SimpleDrawingPad.exe          open the board now, exit after closing it
 //         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
 //                                       the tray menu, kept in %APPDATA%\simple-drawing-pad\hotkey.txt) opens the board
-// Output: <Pictures>\simple-drawing-pad\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt); Esc: ...\cancelled\
-//         <Pictures> is the Pictures known folder (it may be redirected).
-//         Every close writes <Pictures>\simple-drawing-pad\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
+// Output: %LOCALAPPDATA%\simple-drawing-pad\drawings\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt);
+//         Esc: ...\drawings\cancelled\. A drawing is a quick note for Claude, not an archive: the folder stays on this
+//         computer (never in Pictures, which OneDrive may sync to other computers) and keeps the last 30 drawings.
+//         Every close writes ...\drawings\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
 // Helper: --tray writes %LOCALAPPDATA%\simple-drawing-pad\helper.txt whenever it registers its shortcut:
-//         ok | taken, shortcut, process id, local time. status.ps1 reads it. It is kept out of <Pictures>, which
-//         may be synced to other computers (OneDrive), because it describes this computer only.
+//         ok | taken, shortcut, process id, local time. status.ps1 reads it.
 // Build:  build.ps1 (uses the C# compiler that ships with Windows / .NET Framework 4)
 using System;
 using System.Collections.Generic;
@@ -482,12 +483,26 @@ namespace SimpleDrawingPadApp
             base.Dispose(disposing);
             if (disposing) { if (sheetG != null) sheetG.Dispose(); sheet.Dispose(); hint.Dispose(); }
         }
-        // <Pictures>\simple-drawing-pad, where <Pictures> is the Pictures known folder (it may be redirected)
+        // %LOCALAPPDATA%\simple-drawing-pad\drawings: on this computer only (Local AppData never roams or syncs)
         static string OutDir()
         {
-            string pics = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures, Environment.SpecialFolderOption.Create);
-            if (pics.Length == 0) pics = Path.Combine(Environment.GetEnvironmentVariable("USERPROFILE"), "Pictures");
-            return Path.Combine(pics, "simple-drawing-pad");
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "simple-drawing-pad", "drawings");
+        }
+        // keeps the newest Keep drawings in a folder; the names sort by time (drawing_yyyyMMdd_HHmmss.png, Gregorian).
+        // The drawing just saved is never deleted, even if its name sorts first (the clock was set back).
+        // Never fails the save: a file that cannot be deleted now is left for the next time.
+        const int Keep = 30;
+        static void Prune(string folder, string justSaved)
+        {
+            try
+            {
+                string[] files = Directory.GetFiles(folder, "drawing_*.png");
+                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < files.Length - Keep; i++)
+                    if (!string.Equals(files[i], justSaved, StringComparison.OrdinalIgnoreCase))
+                        try { File.Delete(files[i]); } catch (Exception) { }
+            }
+            catch (Exception) { }
         }
         // Enter / close: PNG + latest.png + latest.txt + clipboard. Esc: PNG in cancelled\ only (latest.* untouched),
         // so a stray Esc never loses a drawing. Every close ends with status.txt (copied | cancelled | empty, PNG path,
@@ -501,8 +516,10 @@ namespace SimpleDrawingPadApp
             {
                 string to = cancelled ? Path.Combine(dir, "cancelled") : dir;
                 Directory.CreateDirectory(to);
-                file = Path.Combine(to, "drawing_" + now.ToString("yyyyMMdd_HHmmss") + ".png");
+                // invariant culture: a Persian or Thai regional format would otherwise write another calendar's year
+                file = Path.Combine(to, "drawing_" + now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".png");
                 sheet.Save(file, ImageFormat.Png);
+                Prune(to, file);
             }
             if (state == "copied")
             {
