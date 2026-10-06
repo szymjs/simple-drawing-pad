@@ -1,9 +1,20 @@
 # Simple Drawing Pad
 
-**Draw your idea, then paste it from the clipboard wherever you need it. It just works. Simple as that.**\
-*Simple by design, made for simple use.*
+A Claude Code plugin.
 
-A Claude Code plugin: sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) and let Claude look at it. Quick notes, as easy as dictating: three keys, draw, Enter, Ctrl+V.
+**Like dictation, but drawn - a quick sketch takes your idea to Claude or any app.**
+
+Ctrl+Alt+D = draw\
+Enter = copy\
+Ctrl+V = paste.
+
+Simple as that. A small helper is built on your PC from the included source (nothing downloaded, no admin rights).
+
+Local only, no network, collects nothing. Starts with Windows. It asks once per computer before installing, and a short local check at each session start tells Claude if it works.
+
+Remove it in Windows Settings > Apps.
+
+For Windows PCs only.
 
 - **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it; a mouse or trackpad works too. Enter copies the drawing to the clipboard; paste it with Ctrl+V.
 - **Browser board (any system):** one offline page with pen pressure, eraser, undo and PNG export.
