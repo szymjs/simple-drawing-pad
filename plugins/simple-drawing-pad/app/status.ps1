@@ -1,4 +1,4 @@
-﻿# Says whether the Simple Drawing Pad pen window works on this computer.
+# Says whether the Simple Drawing Pad pen window works on this computer.
 #   .\status.ps1                 a short report that changes nothing; the last line is "Result: <state>: <what to do>",
 #                                where <state> is ready, not-installed, not-running, shortcut-taken or update-available
 #   .\status.ps1 -SessionStart   for the plugin's SessionStart hook (hooks\hooks.json). When something is wrong it shows
@@ -6,7 +6,6 @@
 #                                (one JSON line); nothing when the pen window is ready. To show each notice only once
 #                                it writes %LOCALAPPDATA%\simple-drawing-pad\notice.txt (this computer only).
 # The plugin comes with the user's Claude account; the program is installed separately on each Windows computer.
-# This file is UTF-8 with a BOM (Windows PowerShell 5.1 needs it for the Polish texts).
 param([switch]$SessionStart)
 $ErrorActionPreference = 'Stop'
 
@@ -22,10 +21,6 @@ function Get-SourceHash([string[]]$paths) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
 }
-
-# the user's notice in Polish when Windows' display language is Polish (as the drawing window does), else English
-$pl = [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName -eq 'pl'
-function L([string]$en, [string]$plText) { if ($pl) { $plText } else { $en } }
 
 # a shortcut name read from a file reaches the user and Claude only if it looks like one (Ctrl+Alt+D, Ctrl+Shift+F12)
 function Test-Shortcut([string]$s) { $s.Length -le 40 -and $s -match '^((ctrl|control|alt|shift)\s*\+\s*){1,3}[a-z0-9]{1,20}$' }
@@ -47,6 +42,7 @@ try {
     $noticeFile = Join-Path $data 'notice.txt'                                      # the notice already shown here
     $legacyOff = Join-Path $data 'no-reminder.txt'                                  # 0.5.0 -Uninstall: no notice
     $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\simple-drawing-pad'   # written by install.ps1 (0.6.2+)
 
     $installed = Test-Path -LiteralPath $exe
     # the helper is found without reading other programs' command lines: by the process id it reports in helper.txt
@@ -90,7 +86,7 @@ try {
     # example in another Claude app that has not updated yet) must not put its older program back.
     $outdated = $false; $srcHash = ''; $built = ''; $ahead = $null
     if ($installed -and (Test-Path -LiteralPath $src)) {
-        $srcHash = Get-SourceHash @($src, (Join-Path $here 'build.ps1'))   # the program and how it is built
+        $srcHash = Get-SourceHash @($src, (Join-Path $here 'build.ps1'), (Join-Path $here 'uninstall.ps1'))   # the program, how it is built and removed
         $built = if (Test-Path -LiteralPath $hashFile) { [IO.File]::ReadAllText($hashFile).Trim() } else { '' }
         if ($built -ne $srcHash) {
             $mine = ''; $theirs = ''
@@ -139,29 +135,23 @@ try {
         if ($key -ne $shown) {
             $tell = switch ($state) {
                 'not-installed' {
-                    (L "Simple Drawing Pad - a one-time question on this computer.`n" "Simple Drawing Pad – jednorazowe pytanie na tym komputerze.`n") +
-                    (L "This plugin works together with a small helper program on this computer: a pencil icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app.`n" `
-                       "Ta wtyczka działa razem z małym programem na tym komputerze: ikoną ołówka przy zegarze (pod ^, jeśli Windows ją ukryje), która po naciśnięciu $hk otwiera okno do rysowania. Enter kopiuje rysunek, Ctrl+V wkleja go w czacie albo w dowolnym innym programie.`n") +
-                    (L "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows and keeps only your last 10 drawings, on this computer, in %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall removes it.`n" `
-                       "Program działa wyłącznie lokalnie: nie korzysta z sieci, niczego nie wysyła i niczego nie zbiera. Powstaje z kodu dołączonego do wtyczki (nic nie jest pobierane, bez uprawnień administratora), uruchamia się razem z Windows i przechowuje tylko 10 ostatnich rysunków, na tym komputerze, w %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall go usuwa.`n") +
-                    (L "To install it, run /simple-drawing-pad:install, or just answer ""yes"" and Claude runs it for you. This question is not shown again on this computer." `
-                       "Aby go zainstalować, wpisz /simple-drawing-pad:install albo po prostu odpowiedz `„tak`”, a Claude uruchomi to polecenie za ciebie. To pytanie nie pojawi się ponownie na tym komputerze.")   # `„ `”: PowerShell would end the string at „ or ”
+                    "Simple Drawing Pad - a one-time question on this computer.`n" +
+                    "This plugin works together with a small helper program on this computer: a pencil icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app.`n" +
+                    "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows and keeps only your last 10 drawings, on this computer, in %LOCALAPPDATA%\simple-drawing-pad. You can remove it in Windows Settings > Apps, or with /simple-drawing-pad:uninstall.`n" +
+                    "To install it, run /simple-drawing-pad:install, or just answer ""yes"" and Claude runs it for you. This question is not shown again on this computer."
                 }
-                'not-running' { L "Simple Drawing Pad: the helper program is installed but not running, so $hk does nothing. /simple-drawing-pad:install starts it again. (Shown once.)" `
-                                  "Simple Drawing Pad: program jest zainstalowany, ale nie działa w tle, więc $hk nic nie robi. /simple-drawing-pad:install uruchomi go ponownie. (Ten komunikat pojawia się raz.)" }
-                'shortcut-taken' { L "Simple Drawing Pad: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad pencil icon by the clock (under ^ if hidden) and choose ""Change shortcut"". (Shown once.)" `
-                                     "Simple Drawing Pad: skrót $hk jest zajęty przez inny program, więc nie otwiera okna do rysowania. Kliknij prawym przyciskiem ikonę ołówka Simple Drawing Pad przy zegarze (pod ^, jeśli ukryta) i wybierz `„Zmień skrót`”. (Ten komunikat pojawia się raz.)" }
-                'update-available' { L "Simple Drawing Pad: this plugin version comes with an updated helper program. /simple-drawing-pad:install updates it in a few seconds. (Shown once.)" `
-                                       "Simple Drawing Pad: ta wersja wtyczki ma zaktualizowany program. /simple-drawing-pad:install zaktualizuje go w kilka sekund. (Ten komunikat pojawia się raz.)" }
+                'not-running' { "Simple Drawing Pad: the helper program is installed but not running, so $hk does nothing. /simple-drawing-pad:install starts it again. (Shown once.)" }
+                'shortcut-taken' { "Simple Drawing Pad: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad pencil icon by the clock (under ^ if hidden) and choose ""Change shortcut"". (Shown once.)" }
+                'update-available' { "Simple Drawing Pad: this plugin version comes with an updated helper program. /simple-drawing-pad:install updates it in a few seconds. (Shown once.)" }
             }
             try { New-Item -ItemType Directory -Force $data | Out-Null; [IO.File]::WriteAllText($noticeFile, $key) } catch { }
         }
         $context = if ($state -eq 'not-installed' -and $tell) {
             'Simple Drawing Pad plugin: the helper program for the pen window is NOT installed on this Windows computer (the plugin comes with the Claude account; the helper is installed separately on each computer). ' +
             'The user has just been shown a one-time question, in the session-start message, whether to install it; it is not shown again. ' +
-            "If the user agrees (for example answers yes or tak) or asks for it, run the /simple-drawing-pad:install command for them: it is the plugin's only installation path, and it installs, checks and tells the user whether it works. " +
+            "If the user agrees (for example answers yes, in any language) or asks for it, run the /simple-drawing-pad:install command for them: it is the plugin's only installation path, and it installs, checks and tells the user whether it works. " +
             'If their first message is about something else, end your reply with one short sentence offering the installation; if they decline or ignore it, do not bring it up again. ' +
-            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only the last 10 drawings in %LOCALAPPDATA%\simple-drawing-pad, and /simple-drawing-pad:uninstall removes it."
+            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only the last 10 drawings in %LOCALAPPDATA%\simple-drawing-pad, and can be removed in Windows Settings > Apps or with /simple-drawing-pad:uninstall."
         } elseif ($tell) {
             "Simple Drawing Pad plugin, pen window status on this Windows computer: $state. $todo The user has just been shown this once. If they want to draw or ask about it, offer the fix; ask before installing."
         } else {
@@ -180,6 +170,7 @@ try {
     'Shortcut:  ' + $(switch ($shortcut) { 'ok' { "$hk works" } 'taken' { "$hk is taken by another program" } default { "$hk (not reported by the helper)" } })
     'Autostart: ' + $(if ($autostart) { 'on' } else { 'off (the helper does not start by itself after a restart)' })
     'Drawings:  ' + (Join-Path $data 'drawings') + ' (this computer only, the last 10 are kept)'
+    if ($installed) { 'Removal:   ' + $(if (Test-Path -LiteralPath $entry) { 'Windows Settings > Apps, or /simple-drawing-pad:uninstall' } else { '/simple-drawing-pad:uninstall (not listed in Windows Settings > Apps yet; /simple-drawing-pad:install adds it)' }) }
     if ($outdated) { 'Update:    this plugin version comes with an updated helper program' }
     if ($ahead) { "Version:   the installed program is newer ($ahead); nothing to do" }
     if ($shown -match '^(not-installed|not-running|shortcut-taken|update-available)( [0-9a-f]{64})?$') { "Notice:    already shown on this computer ($($shown.Split(' ')[0])); not shown again" }

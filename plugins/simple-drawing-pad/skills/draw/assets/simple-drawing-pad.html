@@ -44,17 +44,9 @@
 <canvas id="c"></canvas>
 <script>
 // Simple Drawing Pad: a pressure-sensitive drawing pad for sketching ideas to Claude. No network, no storage.
-const T = {
-  en: { pen: '✏️ Pen', eraser: '🧽 Eraser', thin: 'thin', medium: 'medium', thick: 'thick', grid: '▦ Grid', undo: '↶ Undo',
-        clear: '🗑 Clear', save: '💾 PNG', full: '⛶ Full screen', exitFull: '⛶ Exit full screen', hint: 'Draw, then tell Claude "done".', confirm: 'Clear the whole drawing?',
-        tPen: 'Pen (P)', tEraser: 'Eraser (E). The back end of a pen also erases.', tGrid: 'Grid (G)', tUndo: 'Undo (Ctrl+Z)', tSave: 'Save as PNG', tFull: 'Full screen (F): bigger board' },
-  pl: { pen: '✏️ Pióro', eraser: '🧽 Gumka', thin: 'cienko', medium: 'średnio', thick: 'grubo', grid: '▦ Siatka', undo: '↶ Cofnij',
-        clear: '🗑 Wyczyść', save: '💾 PNG', full: '⛶ Pełny ekran', exitFull: '⛶ Zamknij pełny ekran', hint: 'Narysuj i napisz Claude „gotowe”.', confirm: 'Wyczyścić cały rysunek?',
-        tPen: 'Pióro (P)', tEraser: 'Gumka (E). Tylna końcówka pióra też ściera.', tGrid: 'Siatka (G)', tUndo: 'Cofnij (Ctrl+Z)', tSave: 'Zapisz jako PNG', tFull: 'Pełny ekran (F): większa tablica' }
-};
-const lang = (new URLSearchParams(location.search).get('lang') || navigator.language || 'en').slice(0, 2);
-const L = T[lang] || T.en;
-document.documentElement.lang = T[lang] ? lang : 'en';
+const L = { pen: '✏️ Pen', eraser: '🧽 Eraser', thin: 'thin', medium: 'medium', thick: 'thick', grid: '▦ Grid', undo: '↶ Undo',
+  clear: '🗑 Clear', save: '💾 PNG', full: '⛶ Full screen', exitFull: '⛶ Exit full screen', hint: 'Draw, then tell Claude "done".', confirm: 'Clear the whole drawing?',
+  tPen: 'Pen (P)', tEraser: 'Eraser (E). The back end of a pen also erases.', tGrid: 'Grid (G)', tUndo: 'Undo (Ctrl+Z)', tSave: 'Save as PNG', tFull: 'Full screen (F): bigger board' };
 document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = L[el.dataset.i18n]);
 const tips = {pen: 'tPen', eraser: 'tEraser', grid: 'tGrid', undo: 'tUndo', save: 'tSave', full: 'tFull'};
 for (const [id, k] of Object.entries(tips)) document.getElementById(id).title = L[k];

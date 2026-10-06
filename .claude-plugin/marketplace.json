@@ -4,16 +4,16 @@
     "name": "szymjs"
   },
   "metadata": {
-    "description": "Simple Drawing Pad: sketch an idea by hand with a graphics tablet, mouse or touch screen and let Claude look at it."
+    "description": "Simple Drawing Pad: sketch an idea by hand with a graphics tablet, mouse or touch screen and let Claude look at it (drawing window on Windows, a browser board elsewhere)."
   },
   "plugins": [
     {
       "name": "simple-drawing-pad",
       "source": "./plugins/simple-drawing-pad",
-      "description": "Sketch an idea by hand and paste it to Claude or any app. On Windows it needs a small helper program on your computer: built from the included source (nothing downloaded, no admin rights), it starts with Windows, works only locally (no network, collects nothing) and keeps your last 10 drawings; /simple-drawing-pad:uninstall removes it. The plugin asks once per computer before installing it, and a short local check at each session start tells Claude whether it works. Then Ctrl+Alt+D opens the drawing window, Enter copies, Ctrl+V pastes. Simple as that.",
-      "version": "0.6.1",
+      "description": "For Windows PCs: sketch an idea by hand and paste it to Claude or any app. Ctrl+Alt+D opens the drawing window, Enter copies, Ctrl+V pastes. Simple as that. It needs a small helper program on your computer, built from the included source (nothing downloaded, no admin rights): it starts with Windows, works only locally (no network, collects nothing) and keeps your last 10 drawings. The plugin asks once per computer before installing it, and a short local check at each session start tells Claude whether it works. Remove the helper in Windows Settings > Apps or with /simple-drawing-pad:uninstall. On macOS and Linux only a simple offline browser board is available.",
+      "version": "0.6.2",
       "license": "MIT",
-      "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab"]
+      "keywords": ["sketch", "drawing", "wacom", "pen", "tablet", "wintab", "windows"]
     }
   ]
 }

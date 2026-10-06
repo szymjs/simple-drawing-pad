@@ -22,7 +22,7 @@ On Windows the pen window is a **small helper program on your computer**: a penc
 - **Built from the included source** (`app/SimpleDrawingPad.cs`) by the C# compiler that is part of Windows. Nothing is downloaded, no administrator rights.
 - **Starts with Windows** (a per-user autostart entry), so the shortcut works after a restart.
 - **Keeps only your last 10 drawings, on this computer**, in `%LOCALAPPDATA%\simple-drawing-pad\drawings`, never in a synced folder. A drawing is a quick note, not an archive; the clipboard holds the one you paste. (Windows' own clipboard history and its sync, if you turned them on, are Windows features.)
-- **`/simple-drawing-pad:uninstall` removes it**; your drawings and the shortcut setting are kept.
+- **Remove it in Windows Settings > Apps** (listed as Simple Drawing Pad, for your user only) **or with `/simple-drawing-pad:uninstall`**; your drawings and the shortcut setting are kept. The Settings entry works even if you removed the plugin from Claude first.
 - **A short check at each session start.** At the start of each new Claude Code session on Windows, the plugin runs `app/status.ps1` without asking: it looks for its helper and autostart entry, writes only `notice.txt` (which notice it already showed), and tells Claude the result. A plugin update can change this script; the helper program itself changes only when you run `/simple-drawing-pad:install`.
 
 ## Install
@@ -56,29 +56,31 @@ Ask Claude why: it runs the plugin's check, `app\status.ps1`, whose last line sa
 | Space or E | eraser (in whole-tablet mode the pen's back end and side buttons erase too) |
 | Backspace | undo |
 | Delete | clear the sheet |
-| Enter | copy the drawing to the clipboard, then paste it with **Ctrl+V** (closing the window with X or Alt+F4 does the same) |
+| Enter | copy the drawing to the clipboard, then paste it with **Ctrl+V** (closing the window with X or Alt+F4, or Exit in the tray menu, does the same) |
 | Esc | cancel: nothing goes to the clipboard; the drawing is kept in the `cancelled` folder |
 
 An empty sheet is never copied. While the window is active in tablet mode the pointer stays inside the sheet; switch away (Alt+Tab) to release it. Change the shortcut from the tray icon menu ("Change shortcut…").
 
 ## What it runs and stores
 
-- `/simple-drawing-pad:install` and `/simple-drawing-pad:uninstall` only ask Claude to run `install.ps1 -Autostart` or `install.ps1 -Uninstall`; Claude Code asks you to approve the command first.
-- `install.ps1` builds `SimpleDrawingPad.exe` from the included source (`app/SimpleDrawingPad.cs`) with the Windows C# compiler `csc.exe` into `app\bin\` inside the plugin folder, copies it to `%LOCALAPPDATA%\Programs\simple-drawing-pad` and starts it in the notification area. It stops a running Simple Drawing Pad helper first.
+- `/simple-drawing-pad:install` and `/simple-drawing-pad:uninstall` only ask Claude to run `install.ps1 -Autostart` or `install.ps1 -Uninstall` (which runs `uninstall.ps1`); Claude Code asks you to approve the command first.
+- `install.ps1` builds `SimpleDrawingPad.exe` from the included source (`app/SimpleDrawingPad.cs`, with `icon.png` as the program's icon) with the Windows C# compiler `csc.exe` into `app\bin\` inside the plugin folder, copies it to `%LOCALAPPDATA%\Programs\simple-drawing-pad` and starts it in the notification area. It stops a running Simple Drawing Pad helper first; if the build fails, it starts the installed one again.
 - With `-Autostart` it adds a per-user autostart value `simple-drawing-pad` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` that starts `SimpleDrawingPad.exe --tray` at logon.
-- Next to the program, `install.ps1` writes `source.sha256` (a hash of the source it was built from) and `version.txt` (the plugin version), so the check can tell when a plugin update brings a newer program, and an older copy of the plugin never asks to put its older program back.
+- It lists the program in Windows Settings > Apps with a per-user entry `simple-drawing-pad` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` (name, version, icon, folder, size). Its Uninstall button runs the copy of `uninstall.ps1` next to the program: the same steps as `/simple-drawing-pad:uninstall`, so it also works after the plugin is removed from Claude, and a small message window tells you the result.
+- Next to the program, `install.ps1` writes `source.sha256` (a hash of the program's source and its build and uninstall scripts) and `version.txt` (the plugin version), so the check can tell when a plugin update brings a newer program, and an older copy of the plugin never asks to put its older program back.
 - Drawings and the plugin's state are kept on this computer only, in `%LOCALAPPDATA%\simple-drawing-pad` (Local AppData never roams or syncs):
   - `drawings\`: each copied drawing as a time-stamped PNG, with `latest.png`, `latest.txt` (path of the newest drawing) and `status.txt` (result of the last session: copied, cancelled or empty); cancelled drawings in `drawings\cancelled`. The last 10 of each are kept; older ones are deleted when you save a new one.
-  - `helper.txt`: written by the helper each time it registers its shortcut (whether it could, which shortcut, its process id, the time), deleted when it exits.
+  - `helper.txt`: written by the helper each time it registers its shortcut (whether it could, which shortcut, its process id, the time), deleted when you exit it from the tray menu. A helper stopped another way leaves it behind; the check then ignores it.
   - `notice.txt`: which session-start notice was already shown, so each one appears only once.
-- `app/status.ps1` reads whether the program is installed, whether its helper is running, `helper.txt`, the autostart value, `source.sha256` and `version.txt`; on its own it changes nothing.
+  - `no-reminder.txt`: written when the helper is removed; it tells a 0.5.0 copy of the plugin, which may still be in another Claude app, not to remind you. The next install deletes it.
+- `app/status.ps1` reads whether the program is installed, whether its helper is running, `helper.txt`, the autostart value, the Settings entry, `source.sha256` and `version.txt`; on its own it changes nothing.
 - **Session start (hook):** at the start of each new Claude Code session, `hooks/hooks.json` runs `powershell ... status.ps1 -SessionStart`. On Windows it prints nothing when all is well. Otherwise it shows you a notice once per computer and problem (the first one is the one-time question whether to install the helper) and remembers that in `notice.txt`, and it tells Claude the state so Claude can help when you ask (it asks before installing anything). On macOS and Linux there is no `powershell` command, so it does nothing.
 - The keyboard shortcut is kept in `%APPDATA%\simple-drawing-pad\hotkey.txt`.
-- Each copied drawing is put on the clipboard, and a Windows notification says so ("paste it with Ctrl+V").
+- Each copied drawing is put on the clipboard, and a Windows notification says so ("paste it with Ctrl+V"). If another program keeps the clipboard busy, the drawing is only saved, and the notification says that instead.
 - The program does not use the network and sends nothing anywhere. Claude sees a drawing only when you paste it or when Claude opens it from `%LOCALAPPDATA%\simple-drawing-pad\drawings`.
 - To pick up a drawing by itself in Claude Code, Claude runs a small PowerShell loop in the background that checks `drawings\status.txt` every 2 seconds, for up to 30 minutes, and then opens the new PNG. It only reads that folder.
 - The browser board saves its PNG through the browser's normal download.
-- `-Uninstall` stops the helper and removes the installed program, `source.sha256`, `version.txt`, `helper.txt` and the autostart entry, and writes `notice.txt` so the plugin does not ask about the helper again on this computer (the next install deletes it). Your drawings and the shortcut setting are kept, and so is the build output in the plugin's `app\bin\` folder.
+- `-Uninstall` (and the Uninstall button in Settings) stops the helper and removes the installed program, `uninstall.ps1`, `source.sha256`, `version.txt`, `helper.txt`, the autostart entry and the Settings entry, and writes `notice.txt` and `no-reminder.txt` so the plugin does not ask about the helper again on this computer (the next install deletes them). Your drawings and the shortcut setting are kept, and so is the build output in the plugin's `app\bin\` folder.
 - Before 0.5.1 drawings were saved in `Pictures\simple-drawing-pad`, which OneDrive may sync between computers; they stay there untouched.
 - Previous name: versions up to 0.3.0 were called drawing-board. If that version's helper is running from `%LOCALAPPDATA%\Programs\drawing-board\DrawingBoard.exe`, `install.ps1` (also with `-Uninstall`) stops it, and it removes that version's autostart value `drawing-board` when the value starts exactly that file. Its files, drawings and shortcut setting are left in place.
 

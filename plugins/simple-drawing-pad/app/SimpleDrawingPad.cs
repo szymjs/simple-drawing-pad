@@ -80,13 +80,6 @@ namespace SimpleDrawingPadApp
         public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4;
     }
 
-    // English by default; Polish when Windows' display language is Polish
-    static class Loc
-    {
-        static readonly bool Pl = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "pl";
-        public static string T(string en, string pl) { return Pl ? pl : en; }
-    }
-
     // the program's icon: a pencil (the board's black and orange) on a white tile with a grey edge, so it shows on
     // dark and light taskbars. Drawn at the size Windows uses, so it stays sharp at any display scaling; no image file.
     static class AppIcon
@@ -159,6 +152,7 @@ namespace SimpleDrawingPadApp
         IntPtr ctx = IntPtr.Zero;
         int maxPressure = 1023;
         public string SavedPath;
+        public bool Copied;                 // false when another program kept the clipboard busy; the PNG is saved anyway
         public static string HotkeyName;   // set by the tray helper; shown in the title so people learn the shortcut
 
         // the plugin version, put into the program by build.ps1 ("" when built without it). It is drawn small, thin and
@@ -185,9 +179,8 @@ namespace SimpleDrawingPadApp
         public BoardForm()
         {
             // the title says how to use it: open, copy, paste (install.ps1 matches titles starting "Simple Drawing Pad")
-            Text = "Simple Drawing Pad  —  " + (HotkeyName != null ? string.Format(Loc.T("{0} opens", "{0} otwiera"), HotkeyName) + "  ·  " : "")
-                 + Loc.T("Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app",
-                         "Enter kopiuje do schowka  ·  Ctrl+V wkleja w czacie lub dowolnym programie");
+            Text = "Simple Drawing Pad  —  " + (HotkeyName != null ? string.Format("{0} opens", HotkeyName) + "  ·  " : "")
+                 + "Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app";
             KeyPreview = true;
             DoubleBuffered = true;
             Icon = AppIcon.Large;
@@ -224,12 +217,12 @@ namespace SimpleDrawingPadApp
                 bar.Controls.Add(b); x += 36;
             }
             x += 10;
-            x = AddButton(Loc.T("Backspace undo", "Backspace cofnij"), x, delegate { Undo(); });
-            x = AddButton(Loc.T("Space eraser", "Spacja gumka"), x, delegate { ToggleEraser(); });
-            x = AddButton(Loc.T("Delete clear", "Delete wyczyść"), x, delegate { ClearAll(); });
+            x = AddButton("Backspace undo", x, delegate { Undo(); });
+            x = AddButton("Space eraser", x, delegate { ToggleEraser(); });
+            x = AddButton("Delete clear", x, delegate { ClearAll(); });
             x += 10;
-            x = AddButton(Loc.T("Enter: copy to clipboard, Ctrl+V: paste in chat", "Enter: kopiuj do schowka, Ctrl+V: wklej w czacie"), x, delegate { Close(); });
-            x = AddButton(Loc.T("Esc: cancel", "Esc: anuluj"), x, delegate { cancelled = true; Close(); });
+            x = AddButton("Enter: copy to clipboard, Ctrl+V: paste in chat", x, delegate { Close(); });
+            x = AddButton("Esc: cancel", x, delegate { cancelled = true; Close(); });
             status.AutoSize = true; status.Location = new Point(x + 12, 15); status.ForeColor = Color.DimGray;
             hint.ShowAlways = true;   // in tablet mode the cursor is kept on the sheet, so the tooltip shows when the board is inactive
             bar.Controls.Add(status);
@@ -248,14 +241,12 @@ namespace SimpleDrawingPadApp
         // short text so nothing is cut off at 125-150% scaling; the explanation is in the tooltip
         void UpdateStatus()
         {
-            status.Text = string.Format(Loc.T("{0} | width {1}/5 | {2}", "{0} | grubość {1}/5 | {2}"),
-                Erasing ? Loc.T("ERASER", "GUMKA") : ctx != IntPtr.Zero ? "tablet" : Loc.T("mouse", "mysz"),
+            status.Text = string.Format("{0} | width {1}/5 | {2}",
+                Erasing ? "ERASER" : ctx != IntPtr.Zero ? "tablet" : "mouse",
                 level, PaletteNames[colorIndex]);
             hint.SetToolTip(status, ctx != IntPtr.Zero
-                ? Loc.T("Tablet mode: while this window is active, the whole tablet draws on this sheet. Pen back end or a side button = eraser.",
-                        "Tryb tabletu: gdy to okno jest aktywne, cały tablet rysuje na tym arkuszu. Tył pióra lub boczny przycisk = gumka.")
-                : Loc.T("Mouse mode: draws where the mouse, pen or finger is (no Wintab tablet driver, or a pen display / touch screen).",
-                        "Tryb myszy: rysuje tam, gdzie jest mysz, pióro lub palec (brak sterownika Wintab albo ekran z piórem / dotykowy)."));
+                ? "Tablet mode: while this window is active, the whole tablet draws on this sheet. Pen back end or a side button = eraser."
+                : "Mouse mode: draws where the mouse, pen or finger is (no Wintab tablet driver, or a pen display / touch screen).");
             if (hover) InvalidateCursor();   // the circle may have grown (eraser, width)
             bar.Invalidate();                // the version text hides itself if the longer status would reach it
         }
@@ -263,7 +254,7 @@ namespace SimpleDrawingPadApp
         // keys 6 7 8 9 0: black, orange, light blue, red, grey
         static readonly Color[] Palette = { Color.FromArgb(29, 29, 31), Color.FromArgb(234, 138, 0), Color.FromArgb(77, 171, 247), Color.FromArgb(214, 40, 40), Color.FromArgb(128, 128, 128) };
         static readonly string[] PaletteNames = {
-            Loc.T("black", "czarny"), Loc.T("orange", "pomarańczowy"), Loc.T("light blue", "jasnoniebieski"), Loc.T("red", "czerwony"), Loc.T("grey", "szary") };
+            "black", "orange", "light blue", "red", "grey" };
         static readonly string[] PaletteKeys = { "6", "7", "8", "9", "0" };
         int colorIndex;
         void SetLevel(int l) { level = Math.Max(1, Math.Min(5, l)); UpdateStatus(); }   // 1-5, applies to pen and eraser alike
@@ -534,8 +525,7 @@ namespace SimpleDrawingPadApp
             {
                 // keep the board (and its Wintab context) open so nothing is lost, unless the user chooses to close anyway
                 if (strokes.Count > 0)
-                    e.Cancel = MessageBox.Show(this, string.Format(Loc.T("The drawing could not be saved:\n{0}\n\nClose the board anyway? The drawing will be lost.",
-                        "Nie udało się zapisać rysunku:\n{0}\n\nZamknąć tablicę mimo to? Rysunek przepadnie."), ex.Message),
+                    e.Cancel = MessageBox.Show(this, string.Format("The drawing could not be saved completely:\n{0}\n\nClose the board anyway? What was not saved will be lost.", ex.Message),
                         "Simple Drawing Pad", MessageBoxButtons.YesNo, MessageBoxIcon.Error, MessageBoxDefaultButton.Button2) != DialogResult.Yes;
                 cancelled = false;
             }
@@ -589,7 +579,7 @@ namespace SimpleDrawingPadApp
             {
                 try { File.Copy(file, Path.Combine(dir, "latest.png"), true); } catch (Exception) { }   // a convenience copy; latest.txt names the real file
                 File.WriteAllText(Path.Combine(dir, "latest.txt"), file + Environment.NewLine + now.ToString("o") + Environment.NewLine);
-                try { Clipboard.SetImage(sheet); } catch (ExternalException) { }
+                try { Clipboard.SetImage(sheet); Copied = true; } catch (ExternalException) { }   // Windows retries for about a second
                 SavedPath = file;
             }
             File.WriteAllText(Path.Combine(dir, "status.txt"), state + Environment.NewLine + file + Environment.NewLine + now.ToString("o") + Environment.NewLine);
@@ -620,9 +610,9 @@ namespace SimpleDrawingPadApp
         {
             icon.Icon = AppIcon.Small;
             ContextMenu menu = new ContextMenu();
-            drawItem = menu.MenuItems.Add(Loc.T("Draw", "Rysuj"), delegate { OpenBoard(); });
-            menu.MenuItems.Add(Loc.T("Change shortcut…", "Zmień skrót…"), delegate { ChangeHotkey(); });
-            menu.MenuItems.Add(Loc.T("Exit", "Zakończ"), delegate { Exit(); });
+            drawItem = menu.MenuItems.Add("Draw", delegate { OpenBoard(); });
+            menu.MenuItems.Add("Change shortcut…", delegate { ChangeHotkey(); });
+            menu.MenuItems.Add("Exit", delegate { Exit(); });
             icon.ContextMenu = menu;
             icon.DoubleClick += delegate { OpenBoard(); };
             icon.Visible = true;
@@ -631,9 +621,7 @@ namespace SimpleDrawingPadApp
             try { if (File.Exists(ConfigFile)) saved = Hotkeys.Parse(File.ReadAllText(ConfigFile)); } catch (Exception) { saved = DefaultHotkey; }
             if (Array.IndexOf(Reserved, saved) >= 0) saved = DefaultHotkey;
             if (!Apply(saved))
-                icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format(Loc.T(
-                    "The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".",
-                    "Skrót {0} jest zajęty przez inny program. Kliknij ikonę prawym przyciskiem i wybierz „Zmień skrót”."), Hotkeys.Format(saved)), ToolTipIcon.Warning);
+                icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format("The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".", Hotkeys.Format(saved)), ToolTipIcon.Warning);
         }
 
         // registers the shortcut system-wide; false if another program already owns it
@@ -648,7 +636,7 @@ namespace SimpleDrawingPadApp
             bool ok = Native.RegisterHotKey(hk.Handle, 1, mods, (uint)(k & Keys.KeyCode));
             string name = Hotkeys.Format(hotkey);
             BoardForm.HotkeyName = name;
-            drawItem.Text = Loc.T("Draw", "Rysuj") + " (" + name + ")";
+            drawItem.Text = "Draw" + " (" + name + ")";
             icon.Text = "Simple Drawing Pad (" + name + ")";   // NotifyIcon text: at most 63 characters
             WriteState(ok, name);
             return ok;
@@ -685,15 +673,13 @@ namespace SimpleDrawingPadApp
                 if (Array.IndexOf(Reserved, d.Chosen) >= 0)
                 {
                     Apply(old);
-                    MessageBox.Show(string.Format(Loc.T("{0} is used for copy, paste or other editing, so it cannot open the drawing window. Choose a different one.",
-                        "{0} służy do kopiowania, wklejania lub innej edycji, więc nie może otwierać okna do rysowania. Wybierz inny."), Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(string.Format("{0} is used for copy, paste or other editing, so it cannot open the drawing window. Choose a different one.", Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 if (!Apply(d.Chosen))
                 {
                     Apply(old);
-                    MessageBox.Show(string.Format(Loc.T("The shortcut {0} is taken by another program. Choose a different one.",
-                        "Skrót {0} jest zajęty przez inny program. Wybierz inny."), Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(string.Format("The shortcut {0} is taken by another program. Choose a different one.", Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 try
@@ -703,8 +689,7 @@ namespace SimpleDrawingPadApp
                 }
                 catch (Exception)   // the new shortcut works now; it only is not remembered after a restart
                 {
-                    MessageBox.Show(Loc.T("The new shortcut works now, but could not be saved, so it is not kept after a restart.",
-                        "Nowy skrót działa, ale nie udało się go zapisać, więc po restarcie wróci poprzedni."), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("The new shortcut works now, but could not be saved, so it is not kept after a restart.", "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
         }
@@ -716,12 +701,14 @@ namespace SimpleDrawingPadApp
                 open.Activate(); return;
             }
             BoardForm b = new BoardForm();
-            // after sending, say where the drawing is: on the clipboard, ready for Ctrl+V
+            // after sending, say where the drawing is: on the clipboard, ready for Ctrl+V, or only in the drawings folder
             b.FormClosed += delegate
             {
-                if (b.SavedPath != null)
-                    icon.ShowBalloonTip(4000, "Simple Drawing Pad", Loc.T("Drawing copied. Paste it with Ctrl+V, e.g. in the chat.",
-                        "Rysunek skopiowany. Wklej go przez Ctrl+V, np. w czacie."), ToolTipIcon.Info);
+                if (b.SavedPath == null) return;
+                if (b.Copied)
+                    icon.ShowBalloonTip(4000, "Simple Drawing Pad", "Drawing copied. Paste it with Ctrl+V, e.g. in the chat.", ToolTipIcon.Info);
+                else
+                    icon.ShowBalloonTip(8000, "Simple Drawing Pad", "Drawing saved, but another program was using the clipboard, so it was not copied. It is in %LOCALAPPDATA%\\simple-drawing-pad\\drawings.", ToolTipIcon.Warning);
             };
             open = b;
             open.Show(); open.Activate();
@@ -782,17 +769,22 @@ namespace SimpleDrawingPadApp
         readonly Button ok = new Button();
         public HotkeyDialog(Keys current)
         {
-            Text = Loc.T("Simple Drawing Pad: shortcut", "Simple Drawing Pad: skrót");
+            // the layout below is in 96-DPI pixels; it is scaled together with the text at any display scaling when
+            // the layout resumes (scaling right away would happen before the controls exist)
+            SuspendLayout();
+            AutoScaleDimensions = new SizeF(96F, 96F); AutoScaleMode = AutoScaleMode.Dpi;
+            Text = "Simple Drawing Pad: shortcut";
             Icon = AppIcon.Large;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen; KeyPreview = true; ClientSize = new Size(380, 150);
-            Label info = new Label(); info.Text = Loc.T("Press the new key combination (Ctrl and/or Alt + a key):", "Naciśnij nową kombinację klawiszy (Ctrl i/lub Alt + klawisz):");
+            Label info = new Label(); info.Text = "Press the new key combination (Ctrl and/or Alt + a key):";
             info.AutoSize = true; info.Location = new Point(14, 14); Controls.Add(info);
             shown.Font = new Font(Font.FontFamily, 16f, FontStyle.Bold); shown.AutoSize = true; shown.Location = new Point(14, 44);
             Chosen = current; shown.Text = Hotkeys.Format(current); Controls.Add(shown);
             ok.Text = "OK"; ok.DialogResult = DialogResult.OK; ok.Location = new Point(200, 105); ok.TabStop = false; Controls.Add(ok);
-            Button cancel = new Button(); cancel.Text = Loc.T("Cancel", "Anuluj"); cancel.DialogResult = DialogResult.Cancel; cancel.Location = new Point(285, 105); cancel.TabStop = false; Controls.Add(cancel);
+            Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; cancel.Location = new Point(285, 105); cancel.TabStop = false; Controls.Add(cancel);
             AcceptButton = ok; CancelButton = cancel;
+            ResumeLayout(false);
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
