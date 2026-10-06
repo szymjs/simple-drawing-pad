@@ -1,3 +1,5 @@
+![it just works!](logo.png)
+
 # Simple Drawing Pad
 
 A Claude Code plugin.
