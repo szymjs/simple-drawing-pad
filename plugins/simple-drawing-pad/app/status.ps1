@@ -39,7 +39,6 @@ try {
     $here = Split-Path -Parent $MyInvocation.MyCommand.Path
     $dir = Join-Path $env:LOCALAPPDATA 'Programs\simple-drawing-pad'
     $exe = Join-Path $dir 'SimpleDrawingPad.exe'
-    $bin = Join-Path $here 'bin\SimpleDrawingPad.exe'
     $src = Join-Path $here 'SimpleDrawingPad.cs'
     $hashFile = Join-Path $dir 'source.sha256'                                      # written by install.ps1
     $versionFile = Join-Path $dir 'version.txt'                                     # written by install.ps1 (0.5.1+)
@@ -50,19 +49,21 @@ try {
     $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 
     $installed = Test-Path -LiteralPath $exe
-    # the helper is our program started with --tray, from the installed copy or the plugin's bin\ copy
-    $helpers = @(Get-CimInstance Win32_Process -Filter "Name='SimpleDrawingPad.exe'" |
-        Where-Object { ($_.ExecutablePath -eq $exe -or $_.ExecutablePath -eq $bin) -and $_.CommandLine -match '--tray' })
-    # a helper started as administrator shows no path or command line to a normal process; the process id it
-    # reported in helper.txt still identifies it (same name, same Windows session)
-    if ($helpers.Count -eq 0 -and (Test-Path -LiteralPath $stateFile)) {
+    # the helper is found without reading other programs' command lines: by the process id it reports in helper.txt
+    # (same name, same Windows session; this also finds a helper started as administrator), else, for helpers older
+    # than 0.5.0 that write no helper.txt, by the installed program's path
+    $session = (Get-Process -Id $PID).SessionId
+    $helpers = @()
+    if (Test-Path -LiteralPath $stateFile) {
         $l = @([IO.File]::ReadAllLines($stateFile)); $id = 0
         if ($l.Count -ge 3 -and [int]::TryParse($l[2].Trim(), [ref]$id)) {
             $p = Get-Process -Id $id -ErrorAction SilentlyContinue
-            if ($p -and $p.ProcessName -eq 'SimpleDrawingPad' -and $p.SessionId -eq (Get-Process -Id $PID).SessionId) {
-                $helpers = @([pscustomobject]@{ ProcessId = $p.Id })
-            }
+            if ($p -and $p.ProcessName -eq 'SimpleDrawingPad' -and $p.SessionId -eq $session) { $helpers = @([pscustomobject]@{ ProcessId = $p.Id }) }
         }
+    }
+    if ($helpers.Count -eq 0) {
+        $helpers = @(Get-Process -Name SimpleDrawingPad -ErrorAction SilentlyContinue |
+            Where-Object { $_.SessionId -eq $session -and $_.Path -eq $exe } | ForEach-Object { [pscustomobject]@{ ProcessId = $_.Id } })
     }
 
     $hk = 'Ctrl+Alt+D'   # a changed shortcut is reported by the helper itself (helper.txt)
