@@ -38,5 +38,5 @@ body:
     id: check
     attributes:
       label: The plugin's check
-      description: Ask Claude "run the Simple Drawing Pad check" and paste the last lines here. Paths show your Windows user name; you can replace it with <name>.
+      description: Ask Claude "run the Simple Drawing Pad check" and paste the last lines here. Paths show your Windows user name; you can replace it with NAME.
       render: text
