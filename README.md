@@ -1,5 +1,3 @@
-![it just works!](plugins/simple-drawing-pad/logo.png)
-
 # Simple Drawing Pad
 
 **Draw your idea, then paste it from the clipboard wherever you need it. It just works. Simple as that.**\
@@ -10,11 +8,9 @@ A Claude Code plugin: sketch an idea by hand (a layout, wiring, a UI mockup, a d
 - **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it; a mouse or trackpad works too. Enter copies the drawing to the clipboard; paste it with Ctrl+V.
 - **Browser board (any system):** one offline page with pen pressure, eraser, undo and PNG export.
 
-![The drawing window, opened with Ctrl+Alt+D](plugins/simple-drawing-pad/screenshot.png)
+The plugin is code and text only: no pictures or other binary files.
 
-*The logo at the top was written by hand in Simple Drawing Pad, with a Wacom tablet.*
-
-**What runs on your computer:** on Windows the pen window is a small helper program (a pencil icon by the clock), installed once per computer and only when you agree. It works only locally: no network, it sends nothing and collects nothing. It is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only your last 10 drawings on this computer, and you can remove it in Windows Settings > Apps or with `/simple-drawing-pad:uninstall`. At the start of each session a short local check, run without a prompt, tells Claude whether the helper works.
+**What runs on your computer:** on Windows the pen window is a small helper program, installed once per computer and only when you agree. Its pencil icon, which the program draws itself (no image file), marks it by the clock, in Task Manager and in Windows Settings > Apps, so you can always tell what is running. It works only locally: no network, it sends nothing and collects nothing. It is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only your last 10 drawings on this computer, and you can remove it in Windows Settings > Apps or with `/simple-drawing-pad:uninstall`. At the start of each session a short local check, run without a prompt, tells Claude whether the helper works.
 
 ## Install
 
