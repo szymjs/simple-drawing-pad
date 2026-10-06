@@ -17,8 +17,8 @@ if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
 }
 
 # hash of the program's source with line endings normalized, so a checkout with CRLF matches one with LF
-function Get-SourceHash([string]$path) {
-    $text = [IO.File]::ReadAllText($path) -replace "`r`n", "`n"
+function Get-SourceHash([string[]]$paths) {
+    $text = -join ($paths | ForEach-Object { ([IO.File]::ReadAllText($_) -replace "`r`n", "`n") + "`n" })
     $sha = [Security.Cryptography.SHA256]::Create()
     try { -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
 }
@@ -65,9 +65,7 @@ try {
         }
     }
 
-    $hk = 'Ctrl+Alt+D'
-    $hkFile = Join-Path $env:APPDATA 'simple-drawing-pad\hotkey.txt'
-    if (Test-Path -LiteralPath $hkFile) { $t = [IO.File]::ReadAllText($hkFile).Trim(); if (Test-Shortcut $t) { $hk = $t } }
+    $hk = 'Ctrl+Alt+D'   # a changed shortcut is reported by the helper itself (helper.txt)
     # helper.txt: ok | taken, shortcut, process id, time. Trusted only from the one running helper: a helper older
     # than 0.5.0 does not write it, and a helper that has ended leaves its last report behind.
     $shortcut = 'unknown'
@@ -91,7 +89,7 @@ try {
     # example in another Claude app that has not updated yet) must not put its older program back.
     $outdated = $false; $srcHash = ''; $built = ''; $ahead = $null
     if ($installed -and (Test-Path -LiteralPath $src)) {
-        $srcHash = Get-SourceHash $src
+        $srcHash = Get-SourceHash @($src, (Join-Path $here 'build.ps1'))   # the program and how it is built
         $built = if (Test-Path -LiteralPath $hashFile) { [IO.File]::ReadAllText($hashFile).Trim() } else { '' }
         if ($built -ne $srcHash) {
             $mine = ''; $theirs = ''

@@ -161,6 +161,27 @@ namespace SimpleDrawingPadApp
         public string SavedPath;
         public static string HotkeyName;   // set by the tray helper; shown in the title so people learn the shortcut
 
+        // the plugin version, put into the program by build.ps1 ("" when built without it). It is drawn small, thin and
+        // pale at the right end of the toolbar, and left out when it would touch the buttons or the status text.
+        static readonly string VersionText = MakeVersionText();
+        static string MakeVersionText()
+        {
+            Version v = typeof(BoardForm).Assembly.GetName().Version;
+            return v.Major == 0 && v.Minor == 0 && v.Build == 0 ? "" : "v" + v.Major + "." + v.Minor + "." + v.Build;
+        }
+        void DrawVersion(Graphics g)
+        {
+            if (VersionText.Length == 0) return;
+            using (Font f = new Font("Segoe UI Light", 7.5f))
+            {
+                SizeF size = g.MeasureString(VersionText, f);
+                float x = bar.ClientSize.Width - size.Width - 10;
+                if (x < status.Right + 16) return;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                using (Brush pale = new SolidBrush(Color.FromArgb(170, 170, 170))) g.DrawString(VersionText, f, pale, x, (bar.Height - size.Height) / 2);
+            }
+        }
+
         public BoardForm()
         {
             // the title says how to use it: open, copy, paste (install.ps1 matches titles starting "Simple Drawing Pad")
@@ -185,6 +206,7 @@ namespace SimpleDrawingPadApp
         void BuildBar()
         {
             bar.Dock = DockStyle.Top; bar.Height = 48; bar.BackColor = Color.White;
+            bar.Paint += delegate(object s, PaintEventArgs e) { DrawVersion(e.Graphics); };
             Controls.Add(bar);
             int x = 10;
             for (int i = 0; i < 5; i++)
@@ -235,6 +257,7 @@ namespace SimpleDrawingPadApp
                 : Loc.T("Mouse mode: draws where the mouse, pen or finger is (no Wintab tablet driver, or a pen display / touch screen).",
                         "Tryb myszy: rysuje tam, gdzie jest mysz, pióro lub palec (brak sterownika Wintab albo ekran z piórem / dotykowy)."));
             if (hover) InvalidateCursor();   // the circle may have grown (eraser, width)
+            bar.Invalidate();                // the version text hides itself if the longer status would reach it
         }
 
         // keys 6 7 8 9 0: black, orange, light blue, red, grey
@@ -439,7 +462,7 @@ namespace SimpleDrawingPadApp
                 }
             }
         }
-        protected override void OnResize(EventArgs e) { base.OnResize(e); Invalidate(); Reclip(); }
+        protected override void OnResize(EventArgs e) { base.OnResize(e); Invalidate(); bar.Invalidate(); Reclip(); }
         protected override void OnMove(EventArgs e) { base.OnMove(e); Reclip(); }
         // no clip inside the system move/size loop (it would fight a title-bar or border drag); re-clip once at the end
         bool inMoveSize;

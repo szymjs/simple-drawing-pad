@@ -50,8 +50,8 @@ function Remove-LegacyAutostart {
 function Test-Shortcut([string]$s) { $s.Length -le 40 -and $s -match '^((ctrl|control|alt|shift)\s*\+\s*){1,3}[a-z0-9]{1,20}$' }
 
 # same as in status.ps1: hash of the source with line endings normalized
-function Get-SourceHash([string]$path) {
-    $text = [IO.File]::ReadAllText($path) -replace "`r`n", "`n"
+function Get-SourceHash([string[]]$paths) {
+    $text = -join ($paths | ForEach-Object { ([IO.File]::ReadAllText($_) -replace "`r`n", "`n") + "`n" })
     $sha = [Security.Cryptography.SHA256]::Create()
     try { -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
 }
@@ -87,7 +87,7 @@ if ($keep) {
     & (Join-Path $here 'build.ps1')
     New-Item -ItemType Directory -Force $dir | Out-Null
     Copy-Item -LiteralPath $bin -Destination $exe -Force
-    [IO.File]::WriteAllText($hashFile, (Get-SourceHash (Join-Path $here 'SimpleDrawingPad.cs')))   # one line: 0.5.0 compares the whole file
+    [IO.File]::WriteAllText($hashFile, (Get-SourceHash @((Join-Path $here 'SimpleDrawingPad.cs'), (Join-Path $here 'build.ps1'))))   # one line: 0.5.0 compares the whole file
     if ($version) { [IO.File]::WriteAllText($versionFile, $version) } elseif (Test-Path -LiteralPath $versionFile) { Remove-Item -LiteralPath $versionFile }
 }
 # installed (again): start fresh, so a later problem gets its one session-start notice
@@ -101,9 +101,7 @@ if ($Autostart) {
 }
 # started in its own folder, not in the folder this script runs from (for example a project folder)
 $helper = Start-Process -FilePath $exe -ArgumentList '--tray' -WorkingDirectory $dir -PassThru
-$hk = 'Ctrl+Alt+D'
-$hkFile = Join-Path $env:APPDATA 'simple-drawing-pad\hotkey.txt'
-if (Test-Path -LiteralPath $hkFile) { $t = [IO.File]::ReadAllText($hkFile).Trim(); if (Test-Shortcut $t) { $hk = $t } }
+$hk = 'Ctrl+Alt+D'   # a changed shortcut is reported by the helper itself (helper.txt)
 # wait up to 5 s for the new helper to report whether it could register its shortcut
 $report = $null
 for ($i = 0; $i -lt 50 -and -not $report; $i++) {
