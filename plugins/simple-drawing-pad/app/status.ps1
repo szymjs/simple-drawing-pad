@@ -120,19 +120,19 @@ try {
     # different Claude apps do not show it again to each other.
     $shown = if (Test-Path -LiteralPath $noticeFile) { [IO.File]::ReadAllText($noticeFile).Trim() } else { '' }
     if (Test-Path -LiteralPath $legacyOff) { $shown = 'not-installed' }
-    $updateKey = "update-available $built".Trim()   # trimmed like $shown: an install before 0.5.0 has no hash
-    $key = if ($state -eq 'update-available') { $updateKey } else { $state }
-    if ($state -eq 'not-running' -and $shown -eq 'not-installed') { $key = 'not-installed' }   # removed on purpose
+    $updateNotice = "update-available $built".Trim()   # trimmed like $shown: an install before 0.5.0 has no hash
+    $notice = if ($state -eq 'update-available') { $updateNotice } else { $state }
+    if ($state -eq 'not-running' -and $shown -eq 'not-installed') { $notice = 'not-installed' }   # removed on purpose
 
     if ($SessionStart) {
         if ($state -eq 'ready') {
             # all well: a later problem gets its one notice again (an update notice shown by a newer plugin copy for
             # this same program stays remembered)
-            if ((Test-Path -LiteralPath $noticeFile) -and $shown -ne $updateKey) { Remove-Item -LiteralPath $noticeFile }
+            if ((Test-Path -LiteralPath $noticeFile) -and $shown -ne $updateNotice) { Remove-Item -LiteralPath $noticeFile }
             exit 0
         }
         $tell = $null
-        if ($key -ne $shown) {
+        if ($notice -ne $shown) {
             $tell = switch ($state) {
                 'not-installed' {
                     "Simple Drawing Pad - a one-time question on this computer.`n" +
@@ -144,7 +144,7 @@ try {
                 'shortcut-taken' { "Simple Drawing Pad: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad pencil icon by the clock (under ^ if hidden) and choose ""Change shortcut"". (Shown once.)" }
                 'update-available' { "Simple Drawing Pad: this plugin version comes with an updated helper program. /simple-drawing-pad:install updates it in a few seconds. (Shown once.)" }
             }
-            try { New-Item -ItemType Directory -Force $data | Out-Null; [IO.File]::WriteAllText($noticeFile, $key) } catch { }
+            try { New-Item -ItemType Directory -Force $data | Out-Null; [IO.File]::WriteAllText($noticeFile, $notice) } catch { }
         }
         $context = if ($state -eq 'not-installed' -and $tell) {
             'Simple Drawing Pad plugin: the helper program for the pen window is NOT installed on this Windows computer (the plugin comes with the Claude account; the helper is installed separately on each computer). ' +

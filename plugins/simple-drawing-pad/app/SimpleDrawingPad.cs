@@ -6,7 +6,7 @@
 //
 // Usage:  SimpleDrawingPad.exe          open the board now, exit after closing it
 //         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
-//                                       the tray menu, kept in %APPDATA%\simple-drawing-pad\hotkey.txt) opens the board
+//                                       the tray menu, kept in %APPDATA%\simple-drawing-pad\shortcut.txt) opens the board
 // Output: %LOCALAPPDATA%\simple-drawing-pad\drawings\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt);
 //         Esc: ...\drawings\cancelled\. A drawing is a quick note for Claude, not an archive: the folder stays on this
 //         computer (never in Pictures, which OneDrive may sync to other computers) and keeps the last 10 drawings.
@@ -153,7 +153,7 @@ namespace SimpleDrawingPadApp
         int maxPressure = 1023;
         public string SavedPath;
         public bool Copied;                 // false when another program kept the clipboard busy; the PNG is saved anyway
-        public static string HotkeyName;   // set by the tray helper; shown in the title so people learn the shortcut
+        public static string ShortcutName;   // set by the tray helper; shown in the title so people learn the shortcut
 
         // the plugin version, put into the program by build.ps1 ("" when built without it). It is drawn small, thin and
         // pale at the right end of the toolbar, and left out when it would touch the buttons or the status text.
@@ -179,7 +179,7 @@ namespace SimpleDrawingPadApp
         public BoardForm()
         {
             // the title says how to use it: open, copy, paste (install.ps1 matches titles starting "Simple Drawing Pad")
-            Text = "Simple Drawing Pad  —  " + (HotkeyName != null ? string.Format("{0} opens", HotkeyName) + "  ·  " : "")
+            Text = "Simple Drawing Pad  —  " + (ShortcutName != null ? string.Format("{0} opens", ShortcutName) + "  ·  " : "")
                  + "Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app";
             KeyPreview = true;
             DoubleBuffered = true;
@@ -586,21 +586,21 @@ namespace SimpleDrawingPadApp
         }
     }
 
-    // --tray mode: hidden window that owns the hotkey and the notification icon
+    // --tray mode: hidden window that owns the shortcut and the notification icon
     class TrayContext : ApplicationContext
     {
         readonly NotifyIcon icon = new NotifyIcon();
-        readonly HotkeyWindow hk;
+        readonly ShortcutWindow hk;
         readonly MenuItem drawItem;
         BoardForm open;
-        Keys hotkey;
+        Keys shortcut;
 
-        // the shortcut is stored as text ("Ctrl+Alt+D") in %APPDATA%\simple-drawing-pad\hotkey.txt
-        static readonly string ConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "simple-drawing-pad", "hotkey.txt");
+        // the shortcut is stored as text ("Ctrl+Alt+D") in %APPDATA%\simple-drawing-pad\shortcut.txt
+        static readonly string ConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "simple-drawing-pad", "shortcut.txt");
         // whether the shortcut works, for status.ps1 (Claude cannot see the balloon tip): ok | taken, shortcut, process id, local time
         static readonly string StateFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "simple-drawing-pad", "helper.txt");
         static readonly string Pid = System.Diagnostics.Process.GetCurrentProcess().Id.ToString();
-        const Keys DefaultHotkey = Keys.Control | Keys.Alt | Keys.D;
+        const Keys DefaultShortcut = Keys.Control | Keys.Alt | Keys.D;
         // copy, paste and other editing keys stay with the apps: Ctrl+V must paste the drawing, not open the board
         static readonly Keys[] Reserved = {
             Keys.Control | Keys.C, Keys.Control | Keys.V, Keys.Control | Keys.X, Keys.Control | Keys.Z,
@@ -611,31 +611,31 @@ namespace SimpleDrawingPadApp
             icon.Icon = AppIcon.Small;
             ContextMenu menu = new ContextMenu();
             drawItem = menu.MenuItems.Add("Draw", delegate { OpenBoard(); });
-            menu.MenuItems.Add("Change shortcut…", delegate { ChangeHotkey(); });
+            menu.MenuItems.Add("Change shortcut…", delegate { ChangeShortcut(); });
             menu.MenuItems.Add("Exit", delegate { Exit(); });
             icon.ContextMenu = menu;
             icon.DoubleClick += delegate { OpenBoard(); };
             icon.Visible = true;
-            hk = new HotkeyWindow(OpenBoard);
-            Keys saved = DefaultHotkey;
-            try { if (File.Exists(ConfigFile)) saved = Hotkeys.Parse(File.ReadAllText(ConfigFile)); } catch (Exception) { saved = DefaultHotkey; }
-            if (Array.IndexOf(Reserved, saved) >= 0) saved = DefaultHotkey;
+            hk = new ShortcutWindow(OpenBoard);
+            Keys saved = DefaultShortcut;
+            try { if (File.Exists(ConfigFile)) saved = Shortcuts.Parse(File.ReadAllText(ConfigFile)); } catch (Exception) { saved = DefaultShortcut; }
+            if (Array.IndexOf(Reserved, saved) >= 0) saved = DefaultShortcut;
             if (!Apply(saved))
-                icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format("The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".", Hotkeys.Format(saved)), ToolTipIcon.Warning);
+                icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format("The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".", Shortcuts.Format(saved)), ToolTipIcon.Warning);
         }
 
         // registers the shortcut system-wide; false if another program already owns it
         bool Apply(Keys k)
         {
             Native.UnregisterHotKey(hk.Handle, 1);
-            hotkey = k;   // kept even if registering fails, so the menu, tooltip and dialog show the wanted shortcut
+            shortcut = k;   // kept even if registering fails, so the menu, tooltip and dialog show the wanted shortcut
             uint mods = 0;
             if ((k & Keys.Control) != 0) mods |= Native.MOD_CONTROL;
             if ((k & Keys.Alt) != 0) mods |= Native.MOD_ALT;
             if ((k & Keys.Shift) != 0) mods |= Native.MOD_SHIFT;
             bool ok = Native.RegisterHotKey(hk.Handle, 1, mods, (uint)(k & Keys.KeyCode));
-            string name = Hotkeys.Format(hotkey);
-            BoardForm.HotkeyName = name;
+            string name = Shortcuts.Format(shortcut);
+            BoardForm.ShortcutName = name;
             drawItem.Text = "Draw" + " (" + name + ")";
             icon.Text = "Simple Drawing Pad (" + name + ")";   // NotifyIcon text: at most 63 characters
             WriteState(ok, name);
@@ -663,29 +663,29 @@ namespace SimpleDrawingPadApp
             catch (Exception) { }
         }
 
-        void ChangeHotkey()
+        void ChangeShortcut()
         {
-            Keys old = hotkey;
+            Keys old = shortcut;
             Native.UnregisterHotKey(hk.Handle, 1);   // so the current shortcut can be pressed in the dialog too
-            using (HotkeyDialog d = new HotkeyDialog(hotkey))
+            using (ShortcutDialog d = new ShortcutDialog(shortcut))
             {
                 if (d.ShowDialog() != DialogResult.OK || (d.Chosen & Keys.KeyCode) == Keys.None) { Apply(old); return; }
                 if (Array.IndexOf(Reserved, d.Chosen) >= 0)
                 {
                     Apply(old);
-                    MessageBox.Show(string.Format("{0} is used for copy, paste or other editing, so it cannot open the drawing window. Choose a different one.", Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(string.Format("{0} is used for copy, paste or other editing, so it cannot open the drawing window. Choose a different one.", Shortcuts.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 if (!Apply(d.Chosen))
                 {
                     Apply(old);
-                    MessageBox.Show(string.Format("The shortcut {0} is taken by another program. Choose a different one.", Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(string.Format("The shortcut {0} is taken by another program. Choose a different one.", Shortcuts.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(ConfigFile));
-                    File.WriteAllText(ConfigFile, Hotkeys.Format(hotkey));
+                    File.WriteAllText(ConfigFile, Shortcuts.Format(shortcut));
                 }
                 catch (Exception)   // the new shortcut works now; it only is not remembered after a restart
                 {
@@ -729,7 +729,7 @@ namespace SimpleDrawingPadApp
     }
 
     // "Ctrl+Alt+D" <-> Keys
-    static class Hotkeys
+    static class Shortcuts
     {
         public static string Format(Keys k)
         {
@@ -762,12 +762,12 @@ namespace SimpleDrawingPadApp
     }
 
     // small window: press the new combination, OK saves it
-    class HotkeyDialog : Form
+    class ShortcutDialog : Form
     {
         public Keys Chosen;
         readonly Label shown = new Label();
         readonly Button ok = new Button();
-        public HotkeyDialog(Keys current)
+        public ShortcutDialog(Keys current)
         {
             // the layout below is in 96-DPI pixels; it is scaled together with the text at any display scaling when
             // the layout resumes (scaling right away would happen before the controls exist)
@@ -780,7 +780,7 @@ namespace SimpleDrawingPadApp
             Label info = new Label(); info.Text = "Press the new key combination (Ctrl and/or Alt + a key):";
             info.AutoSize = true; info.Location = new Point(14, 14); Controls.Add(info);
             shown.Font = new Font(Font.FontFamily, 16f, FontStyle.Bold); shown.AutoSize = true; shown.Location = new Point(14, 44);
-            Chosen = current; shown.Text = Hotkeys.Format(current); Controls.Add(shown);
+            Chosen = current; shown.Text = Shortcuts.Format(current); Controls.Add(shown);
             ok.Text = "OK"; ok.DialogResult = DialogResult.OK; ok.Location = new Point(200, 105); ok.TabStop = false; Controls.Add(ok);
             Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; cancel.Location = new Point(285, 105); cancel.TabStop = false; Controls.Add(cancel);
             AcceptButton = ok; CancelButton = cancel;
@@ -791,18 +791,18 @@ namespace SimpleDrawingPadApp
             Keys code = keyData & Keys.KeyCode;
             bool isModifier = code == Keys.ControlKey || code == Keys.Menu || code == Keys.ShiftKey || code == Keys.LWin || code == Keys.RWin;
             bool hasMod = (keyData & (Keys.Control | Keys.Alt)) != 0;
-            if (!isModifier && hasMod) { Chosen = keyData & (Keys.KeyCode | Keys.Control | Keys.Alt | Keys.Shift); shown.Text = Hotkeys.Format(Chosen); return true; }
+            if (!isModifier && hasMod) { Chosen = keyData & (Keys.KeyCode | Keys.Control | Keys.Alt | Keys.Shift); shown.Text = Shortcuts.Format(Chosen); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
     }
 
-    class HotkeyWindow : NativeWindow
+    class ShortcutWindow : NativeWindow
     {
-        readonly MethodInvoker onHotkey;
-        public HotkeyWindow(MethodInvoker onHotkey) { this.onHotkey = onHotkey; CreateHandle(new CreateParams()); }
+        readonly MethodInvoker onShortcut;
+        public ShortcutWindow(MethodInvoker onShortcut) { this.onShortcut = onShortcut; CreateHandle(new CreateParams()); }
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == Native.WM_HOTKEY) onHotkey();
+            if (m.Msg == Native.WM_HOTKEY) onShortcut();
             base.WndProc(ref m);
         }
     }

@@ -112,6 +112,10 @@ if ($Autostart) {
 } elseif ($legacyAutostart) {
     'The previous version started at logon; its autostart entry was removed. Run this again with -Autostart to start the helper at every logon.'
 }
+# the shortcut setting is kept in %APPDATA%\simple-drawing-pad\shortcut.txt; up to 0.7.3 the file had another name
+$settings = Join-Path $env:APPDATA 'simple-drawing-pad'
+$oldSetting = Join-Path $settings 'hotkey.txt'
+if ((Test-Path -LiteralPath $oldSetting) -and -not (Test-Path -LiteralPath (Join-Path $settings 'shortcut.txt'))) { Rename-Item -LiteralPath $oldSetting -NewName 'shortcut.txt' }
 # started in its own folder, not in the folder this script runs from (for example a project folder)
 $helper = Start-Process -FilePath $exe -ArgumentList '--tray' -WorkingDirectory $dir -PassThru
 $hk = 'Ctrl+Alt+D'   # a changed shortcut is reported by the helper itself (helper.txt)
