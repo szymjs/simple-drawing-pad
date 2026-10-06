@@ -81,6 +81,12 @@ An empty sheet is never copied. While the window is active in tablet mode the po
 - Before 0.5.1 drawings were saved in `Pictures\simple-drawing-pad`, which OneDrive may sync between computers; they stay there untouched.
 - Previous name: versions up to 0.3.0 were called drawing-board. If that version's helper is running from `%LOCALAPPDATA%\Programs\drawing-board\DrawingBoard.exe`, `install.ps1` (also with `-Uninstall`) stops it, and it removes that version's autostart value `drawing-board` when the value starts exactly that file. Its files, drawings and shortcut setting are left in place.
 
+## Feedback
+
+Questions, ideas or problems: [open an issue](https://github.com/szymjs/simple-drawing-pad/issues/new/choose) on GitHub (a free GitHub account is needed). For a problem, the form asks for your Windows version, the plugin version and the last lines of the plugin's check; Claude can run the check for you. Tested with another tablet, pen display or touch screen? That helps too.
+
+Please do not attach drawings, screenshots or paths that show private information.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
