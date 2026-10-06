@@ -10,39 +10,32 @@ Sketch an idea by hand (a layout, wiring, a UI mockup, a diagram, handwriting) a
 - **Pen window (Windows).** A keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws on the sheet, with pressure, while the window is active. On pen displays and touch laptops it draws where the pen is; with no tablet it uses the mouse or trackpad. Enter copies the drawing to the clipboard and closes the window, so you can paste it into Claude, an email or any other app with Ctrl+V. In Claude Code, Claude can also pick it up by itself.
 - **Browser board (any system).** `skills/draw/assets/simple-drawing-pad.html` is one offline page with pen pressure, eraser, line widths, grid, undo, full screen and PNG export.
 
+![The drawing window, opened with Ctrl+Alt+D](screenshot.png)
+
+*The logo at the top was written by hand in Simple Drawing Pad, with a Wacom tablet.*
+
 ## What runs on your computer
 
 On Windows the pen window is a **small helper program on your computer**: a pencil icon by the clock (Windows may hide it under ^) that opens the drawing window when you press the shortcut. The plugin comes with your Claude account; the helper is installed once on each computer, and only when you agree.
 
-- **Only local.** The helper does not use the network: it sends nothing and collects nothing. It is a local module the plugin and Claude use on this computer.
+- **Only local.** The helper does not use the network: it sends nothing and collects nothing. It is a local module the plugin and Claude use on this computer. It does not watch your keyboard either: Windows tells it only when its own shortcut is pressed, and keys reach it only while its drawing window is active.
 - **Built from the included source** (`app/SimpleDrawingPad.cs`) by the C# compiler that is part of Windows. Nothing is downloaded, no administrator rights.
 - **Starts with Windows** (a per-user autostart entry), so the shortcut works after a restart.
 - **Keeps only your last 10 drawings, on this computer**, in `%LOCALAPPDATA%\simple-drawing-pad\drawings`, never in a synced folder. A drawing is a quick note, not an archive; the clipboard holds the one you paste. (Windows' own clipboard history and its sync, if you turned them on, are Windows features.)
 - **`/simple-drawing-pad:uninstall` removes it**; your drawings and the shortcut setting are kept.
+- **A short check at each session start.** At the start of each new Claude Code session on Windows, the plugin runs `app/status.ps1` without asking: it looks for its helper and autostart entry, writes only `notice.txt` (which notice it already showed), and tells Claude the result. A plugin update can change this script; the helper program itself changes only when you run `/simple-drawing-pad:install`.
 
 ## Install
 
 1. Add the plugin: from the Claude directory, or in Claude Code with `/plugin marketplace add szymjs/simple-drawing-pad` and `/plugin install simple-drawing-pad@simple-drawing-pad`. Start a new session.
-2. **On Windows, the first session asks you once** whether to install the helper on this computer, and explains what it is (as above). Answer "yes" to Claude, or run **`/simple-drawing-pad:install`** (approve the one installer command). Claude then checks that it works and tells you. The question is not shown again on that computer; you can install later with the same command. Each Windows computer needs this step once, because the program lives on the computer.
+2. **On Windows, the first session asks you once** whether to install the helper on this computer, and explains what it is (as above). There is one way to install it: **`/simple-drawing-pad:install`**. Run it, or just answer "yes" and Claude runs it for you (approve the one installer command). It installs the helper, checks that it works and tells you. The question is not shown again on that computer; you can install later with the same command. Each Windows computer needs this step once, because the program lives on the computer.
 3. Press **Ctrl+Alt+D**, draw, press Enter, paste with **Ctrl+V**. The skill is `/simple-drawing-pad:draw`, or just ask Claude to let you draw.
 
 Later, if something stops working (helper not running, shortcut taken by another program, a newer helper in a plugin update), the plugin says so once at the start of a session, with what to do.
 
-Without Claude Code, run this from the root of a clone of [szymjs/simple-drawing-pad](https://github.com/szymjs/simple-drawing-pad):
-
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File "plugins\simple-drawing-pad\app\install.ps1"
-```
-
-Add `-Autostart` to start the shortcut helper at every logon, or `-Uninstall` to remove it. No admin rights are needed.
-
 ## If Ctrl+Alt+D does nothing
 
-Ask Claude why: it runs the plugin's check, `app\status.ps1`, whose last line says what to do. From the root of a clone you can run it yourself:
-
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File "plugins\simple-drawing-pad\app\status.ps1"
-```
+Ask Claude why: it runs the plugin's check, `app\status.ps1`, whose last line says what to do.
 
 - **not-installed / not-running / update-available:** run `/simple-drawing-pad:install` (again).
 - **shortcut-taken:** another program uses the shortcut. Right-click the Simple Drawing Pad icon in the notification area and choose "Change shortcut".

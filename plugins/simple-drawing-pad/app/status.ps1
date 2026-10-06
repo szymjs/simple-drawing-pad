@@ -27,6 +27,9 @@ function Get-SourceHash([string]$path) {
 $pl = [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName -eq 'pl'
 function L([string]$en, [string]$plText) { if ($pl) { $plText } else { $en } }
 
+# a shortcut name read from a file reaches the user and Claude only if it looks like one (Ctrl+Alt+D, Ctrl+Shift+F12)
+function Test-Shortcut([string]$s) { $s.Length -le 40 -and $s -match '^((ctrl|control|alt|shift)\s*\+\s*){1,3}[a-z0-9]{1,20}$' }
+
 # JSON with every non-ASCII character escaped, so the hook's output survives any console code page
 function ConvertTo-AsciiJson($value) {
     [regex]::Replace(($value | ConvertTo-Json -Compress -Depth 4), '[^\x00-\x7F]', { param($m) '\u{0:x4}' -f [int][char]$m.Value })
@@ -64,14 +67,14 @@ try {
 
     $hk = 'Ctrl+Alt+D'
     $hkFile = Join-Path $env:APPDATA 'simple-drawing-pad\hotkey.txt'
-    if (Test-Path -LiteralPath $hkFile) { $t = [IO.File]::ReadAllText($hkFile).Trim(); if ($t) { $hk = $t } }
+    if (Test-Path -LiteralPath $hkFile) { $t = [IO.File]::ReadAllText($hkFile).Trim(); if (Test-Shortcut $t) { $hk = $t } }
     # helper.txt: ok | taken, shortcut, process id, time. Trusted only from the one running helper: a helper older
     # than 0.5.0 does not write it, and a helper that has ended leaves its last report behind.
     $shortcut = 'unknown'
     if ($helpers.Count -eq 1 -and (Test-Path -LiteralPath $stateFile)) {
         $l = @([IO.File]::ReadAllLines($stateFile))
         if ($l.Count -ge 3 -and $l[2].Trim() -eq [string]$helpers[0].ProcessId -and $l[0].Trim() -in 'ok', 'taken') {
-            $shortcut = $l[0].Trim(); if ($l[1].Trim()) { $hk = $l[1].Trim() }
+            $shortcut = $l[0].Trim(); if (Test-Shortcut $l[1].Trim()) { $hk = $l[1].Trim() }
         }
     }
 
@@ -95,7 +98,7 @@ try {
             try { $mine = [string](Get-Content -Raw -LiteralPath (Join-Path $here '..\.claude-plugin\plugin.json') | ConvertFrom-Json).version } catch { }
             if (Test-Path -LiteralPath $versionFile) { $theirs = [IO.File]::ReadAllText($versionFile).Trim() }
             $a = $null; $b = $null
-            if ([version]::TryParse($mine, [ref]$a) -and [version]::TryParse($theirs, [ref]$b) -and $b -gt $a) { $ahead = "$theirs, this plugin copy is $mine" }
+            if ([version]::TryParse($mine, [ref]$a) -and [version]::TryParse($theirs, [ref]$b) -and $b -gt $a) { $ahead = "$b, this plugin copy is $a" }
             else { $outdated = $true }
         }
     }
@@ -142,8 +145,8 @@ try {
                        "Ta wtyczka działa razem z małym programem na tym komputerze: ikoną ołówka przy zegarze (pod ^, jeśli Windows ją ukryje), która po naciśnięciu $hk otwiera okno do rysowania. Enter kopiuje rysunek, Ctrl+V wkleja go w czacie albo w dowolnym innym programie.`n") +
                     (L "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows and keeps only your last 10 drawings, on this computer, in %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall removes it.`n" `
                        "Program działa wyłącznie lokalnie: nie korzysta z sieci, niczego nie wysyła i niczego nie zbiera. Powstaje z kodu dołączonego do wtyczki (nic nie jest pobierane, bez uprawnień administratora), uruchamia się razem z Windows i przechowuje tylko 10 ostatnich rysunków, na tym komputerze, w %LOCALAPPDATA%\simple-drawing-pad. /simple-drawing-pad:uninstall go usuwa.`n") +
-                    (L "To install it, answer ""yes"" to Claude or run /simple-drawing-pad:install. This question is not shown again on this computer." `
-                       "Aby go zainstalować, odpowiedz Claude'owi `„tak`” albo wpisz /simple-drawing-pad:install. To pytanie nie pojawi się ponownie na tym komputerze.")   # `„ `”: PowerShell would end the string at „ or ”
+                    (L "To install it, run /simple-drawing-pad:install, or just answer ""yes"" and Claude runs it for you. This question is not shown again on this computer." `
+                       "Aby go zainstalować, wpisz /simple-drawing-pad:install albo po prostu odpowiedz `„tak`”, a Claude uruchomi to polecenie za ciebie. To pytanie nie pojawi się ponownie na tym komputerze.")   # `„ `”: PowerShell would end the string at „ or ”
                 }
                 'not-running' { L "Simple Drawing Pad: the helper program is installed but not running, so $hk does nothing. /simple-drawing-pad:install starts it again. (Shown once.)" `
                                   "Simple Drawing Pad: program jest zainstalowany, ale nie działa w tle, więc $hk nic nie robi. /simple-drawing-pad:install uruchomi go ponownie. (Ten komunikat pojawia się raz.)" }
@@ -154,12 +157,10 @@ try {
             }
             try { New-Item -ItemType Directory -Force $data | Out-Null; [IO.File]::WriteAllText($noticeFile, $key) } catch { }
         }
-        $install = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $here 'install.ps1') + '" -Autostart'
-        $check = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $here 'status.ps1') + '"'
         $context = if ($state -eq 'not-installed' -and $tell) {
             'Simple Drawing Pad plugin: the helper program for the pen window is NOT installed on this Windows computer (the plugin comes with the Claude account; the helper is installed separately on each computer). ' +
             'The user has just been shown a one-time question, in the session-start message, whether to install it; it is not shown again. ' +
-            "If the user agrees (for example answers yes or tak) or asks for it, install it now with exactly: $install ; then run $check and tell the user in one or two sentences whether it works. " +
+            "If the user agrees (for example answers yes or tak) or asks for it, run the /simple-drawing-pad:install command for them: it is the plugin's only installation path, and it installs, checks and tells the user whether it works. " +
             'If their first message is about something else, end your reply with one short sentence offering the installation; if they decline or ignore it, do not bring it up again. ' +
             "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only the last 10 drawings in %LOCALAPPDATA%\simple-drawing-pad, and /simple-drawing-pad:uninstall removes it."
         } elseif ($tell) {
@@ -182,7 +183,7 @@ try {
     'Drawings:  ' + (Join-Path $data 'drawings') + ' (this computer only, the last 10 are kept)'
     if ($outdated) { 'Update:    this plugin version comes with an updated helper program' }
     if ($ahead) { "Version:   the installed program is newer ($ahead); nothing to do" }
-    if ($shown) { "Notice:    already shown on this computer ($($shown.Split(' ')[0])); not shown again" }
+    if ($shown -match '^(not-installed|not-running|shortcut-taken|update-available)( [0-9a-f]{64})?$') { "Notice:    already shown on this computer ($($shown.Split(' ')[0])); not shown again" }
     "Result: ${state}: $todo"
 } catch {
     # the SessionStart hook stays silent; a failed check is no reason to bother the user at every session

@@ -23,6 +23,10 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
+// Wintab32.dll, user32.dll and shcore.dll are loaded only from System32, never from the program's own (user-writable)
+// folder, so a file planted there under one of these names is not loaded (DLL hijacking)
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 namespace SimpleDrawingPadApp
 {
     static class Wintab
@@ -285,8 +289,7 @@ namespace SimpleDrawingPadApp
                 ctx = Wintab.WTOpenW(Handle, ref lc, true);
                 if (ctx != IntPtr.Zero) Wintab.WTQueueSizeSet(ctx, 256);
             }
-            catch (DllNotFoundException) { ctx = IntPtr.Zero; }
-            catch (EntryPointNotFoundException) { ctx = IntPtr.Zero; }
+            catch (Exception) { ctx = IntPtr.Zero; }   // no driver, or a broken one: draw with the mouse instead
             UpdateStatus();
         }
 
@@ -585,6 +588,10 @@ namespace SimpleDrawingPadApp
         static readonly string StateFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "simple-drawing-pad", "helper.txt");
         static readonly string Pid = System.Diagnostics.Process.GetCurrentProcess().Id.ToString();
         const Keys DefaultHotkey = Keys.Control | Keys.Alt | Keys.D;
+        // copy, paste and other editing keys stay with the apps: Ctrl+V must paste the drawing, not open the board
+        static readonly Keys[] Reserved = {
+            Keys.Control | Keys.C, Keys.Control | Keys.V, Keys.Control | Keys.X, Keys.Control | Keys.Z,
+            Keys.Control | Keys.Y, Keys.Control | Keys.A, Keys.Control | Keys.S, Keys.Alt | Keys.F4 };
 
         public TrayContext()
         {
@@ -599,6 +606,7 @@ namespace SimpleDrawingPadApp
             hk = new HotkeyWindow(OpenBoard);
             Keys saved = DefaultHotkey;
             try { if (File.Exists(ConfigFile)) saved = Hotkeys.Parse(File.ReadAllText(ConfigFile)); } catch (Exception) { saved = DefaultHotkey; }
+            if (Array.IndexOf(Reserved, saved) >= 0) saved = DefaultHotkey;
             if (!Apply(saved))
                 icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format(Loc.T(
                     "The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".",
@@ -651,6 +659,13 @@ namespace SimpleDrawingPadApp
             using (HotkeyDialog d = new HotkeyDialog(hotkey))
             {
                 if (d.ShowDialog() != DialogResult.OK || (d.Chosen & Keys.KeyCode) == Keys.None) { Apply(old); return; }
+                if (Array.IndexOf(Reserved, d.Chosen) >= 0)
+                {
+                    Apply(old);
+                    MessageBox.Show(string.Format(Loc.T("{0} is used for copy, paste or other editing, so it cannot open the drawing window. Choose a different one.",
+                        "{0} służy do kopiowania, wklejania lub innej edycji, więc nie może otwierać okna do rysowania. Wybierz inny."), Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
                 if (!Apply(d.Chosen))
                 {
                     Apply(old);
@@ -658,8 +673,16 @@ namespace SimpleDrawingPadApp
                         "Skrót {0} jest zajęty przez inny program. Wybierz inny."), Hotkeys.Format(d.Chosen)), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                Directory.CreateDirectory(Path.GetDirectoryName(ConfigFile));
-                File.WriteAllText(ConfigFile, Hotkeys.Format(hotkey));
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(ConfigFile));
+                    File.WriteAllText(ConfigFile, Hotkeys.Format(hotkey));
+                }
+                catch (Exception)   // the new shortcut works now; it only is not remembered after a restart
+                {
+                    MessageBox.Show(Loc.T("The new shortcut works now, but could not be saved, so it is not kept after a restart.",
+                        "Nowy skrót działa, ale nie udało się go zapisać, więc po restarcie wróci poprzedni."), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
         }
         void OpenBoard()

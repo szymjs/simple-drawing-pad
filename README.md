@@ -10,7 +10,11 @@ A Claude Code plugin: sketch an idea by hand (a layout, wiring, a UI mockup, a d
 - **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it; a mouse or trackpad works too. Enter copies the drawing to the clipboard; paste it with Ctrl+V.
 - **Browser board (any system):** one offline page with pen pressure, eraser, undo and PNG export.
 
-**What runs on your computer:** on Windows the pen window is a small helper program (a pencil icon by the clock), installed once per computer and only when you agree. It works only locally: no network, it sends nothing and collects nothing. It is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only your last 10 drawings on this computer, and `/simple-drawing-pad:uninstall` removes it.
+![The drawing window, opened with Ctrl+Alt+D](plugins/simple-drawing-pad/screenshot.png)
+
+*The logo at the top was written by hand in Simple Drawing Pad, with a Wacom tablet.*
+
+**What runs on your computer:** on Windows the pen window is a small helper program (a pencil icon by the clock), installed once per computer and only when you agree. It works only locally: no network, it sends nothing and collects nothing. It is built from the included source (nothing downloaded, no administrator rights), starts with Windows, keeps only your last 10 drawings on this computer, and `/simple-drawing-pad:uninstall` removes it. At the start of each session a short local check, run without a prompt, tells Claude whether the helper works.
 
 ## Install
 
@@ -23,7 +27,7 @@ In Claude Code:
 
 Or add it from the Claude directory. Start a new session afterwards, then:
 
-1. On Windows the first session asks you **once** whether to install the helper on this computer. Answer "yes" to Claude or run **`/simple-drawing-pad:install`**; Claude checks that it works and tells you. Each Windows computer needs this once (`/simple-drawing-pad:uninstall` removes it).
+1. On Windows the first session asks you **once** whether to install the helper on this computer. There is one way to install it: **`/simple-drawing-pad:install`**. Run it, or just answer "yes" and Claude runs it for you; it checks that it works and tells you. Each Windows computer needs this once (`/simple-drawing-pad:uninstall` removes it).
 2. Press **Ctrl+Alt+D**, draw, press Enter, paste with **Ctrl+V**.
 
 If the helper later stops working on a computer, the plugin says so once at the start of a session, with what to do.

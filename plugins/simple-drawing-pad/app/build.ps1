@@ -5,8 +5,12 @@ if (-not (Test-Path -LiteralPath $csc)) { $csc = Join-Path $env:WINDIR 'Microsof
 if (-not (Test-Path -LiteralPath $csc)) { throw "C# compiler not found in $env:WINDIR\Microsoft.NET\Framework64 or Framework\v4.0.30319 (.NET Framework 4 is part of Windows 10/11)." }
 $out = Join-Path $here 'bin'
 New-Item -ItemType Directory -Force $out | Out-Null
-& $csc /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 `
-    /reference:System.Windows.Forms.dll /reference:System.Drawing.dll `
-    "/out:$(Join-Path $out 'SimpleDrawingPad.exe')" (Join-Path $here 'SimpleDrawingPad.cs')
+# run from the compiler's own folder: csc looks for referenced libraries in the current folder first
+Push-Location -LiteralPath (Split-Path -Parent $csc)
+try {
+    & $csc /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 `
+        /reference:System.Windows.Forms.dll /reference:System.Drawing.dll `
+        "/out:$(Join-Path $out 'SimpleDrawingPad.exe')" (Join-Path $here 'SimpleDrawingPad.cs')
+} finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
 "built: $(Join-Path $out 'SimpleDrawingPad.exe')"

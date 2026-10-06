@@ -21,4 +21,4 @@ Install the Simple Drawing Pad helper program on this Windows computer. The user
 
 If the installer says the drawing window is open, ask the user to close it (Enter or Esc) and run the command again.
 
-If you cannot run commands on the user's computer directly (for example you work from the cloud and reach the computer through the Claude app), ask the user for a new, empty folder for the installer, such as `C:\Users\<name>\simple-drawing-pad` (not Downloads, so you get no access to their other files). Copy the plugin's `app` folder there and run its `install.ps1 -Autostart`.
+If you cannot run commands on the user's computer directly (for example you work from the cloud), do not write the installer onto it yourself. Ask the user to run `/simple-drawing-pad:install` in Claude Code on that computer.

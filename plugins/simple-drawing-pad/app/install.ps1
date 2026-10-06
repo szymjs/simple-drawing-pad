@@ -46,6 +46,9 @@ function Remove-LegacyAutostart {
     return $true
 }
 
+# a shortcut name read from a file reaches the user and Claude only if it looks like one (Ctrl+Alt+D, Ctrl+Shift+F12)
+function Test-Shortcut([string]$s) { $s.Length -le 40 -and $s -match '^((ctrl|control|alt|shift)\s*\+\s*){1,3}[a-z0-9]{1,20}$' }
+
 # same as in status.ps1: hash of the source with line endings normalized
 function Get-SourceHash([string]$path) {
     $text = [IO.File]::ReadAllText($path) -replace "`r`n", "`n"
@@ -79,7 +82,7 @@ $keep = (Test-Path -LiteralPath $exe) -and [version]::TryParse($version, [ref]$a
 
 Stop-Helper   # before the build, so a helper started from bin\ cannot lock the build output
 if ($keep) {
-    "The installed program ($installedVersion) is newer than this copy of the plugin ($version), so it is kept and only started."
+    "The installed program ($b) is newer than this copy of the plugin ($a), so it is kept and only started."
 } else {
     & (Join-Path $here 'build.ps1')
     New-Item -ItemType Directory -Force $dir | Out-Null
@@ -96,10 +99,11 @@ if ($Autostart) {
 } elseif ($legacyAutostart) {
     'The previous version started at logon; its autostart entry was removed. Run this again with -Autostart to start the helper at every logon.'
 }
-$helper = Start-Process -FilePath $exe -ArgumentList '--tray' -PassThru
+# started in its own folder, not in the folder this script runs from (for example a project folder)
+$helper = Start-Process -FilePath $exe -ArgumentList '--tray' -WorkingDirectory $dir -PassThru
 $hk = 'Ctrl+Alt+D'
 $hkFile = Join-Path $env:APPDATA 'simple-drawing-pad\hotkey.txt'
-if (Test-Path -LiteralPath $hkFile) { $t = [IO.File]::ReadAllText($hkFile).Trim(); if ($t) { $hk = $t } }
+if (Test-Path -LiteralPath $hkFile) { $t = [IO.File]::ReadAllText($hkFile).Trim(); if (Test-Shortcut $t) { $hk = $t } }
 # wait up to 5 s for the new helper to report whether it could register its shortcut
 $report = $null
 for ($i = 0; $i -lt 50 -and -not $report; $i++) {
@@ -107,7 +111,7 @@ for ($i = 0; $i -lt 50 -and -not $report; $i++) {
     $l = @(Get-Content -LiteralPath $stateFile -ErrorAction SilentlyContinue)
     if ($l.Count -ge 3 -and $l[2].Trim() -eq [string]$helper.Id) { $report = $l }
 }
-if ($report -and $report[1].Trim()) { $hk = $report[1].Trim() }
+if ($report -and (Test-Shortcut $report[1].Trim())) { $hk = $report[1].Trim() }
 "Installed: $exe"
 if ($report -and $report[0].Trim() -eq 'taken') {
     "WARNING: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad icon in the notification area and choose ""Change shortcut"" to pick another one."
