@@ -18,11 +18,21 @@ body:
     attributes:
       label: Windows version
       placeholder: Windows 11 24H2
+  - type: dropdown
+    id: claude
+    attributes:
+      label: How is Claude installed?
+      description: The Microsoft Store version of the Claude app runs the plugin in a sandbox, so this helps to find the cause.
+      options:
+        - Claude desktop app from the Microsoft Store
+        - Claude desktop app from claude.ai (EXE)
+        - claude in a terminal
+        - Not sure
   - type: input
     id: version
     attributes:
       label: Plugin version
-      description: Shown small in the drawing window's toolbar, and in Windows Settings > Apps > Simple Drawing Pad.
+      description: Shown small in the drawing window's toolbar (open it with the shortcut, close it with Esc).
       placeholder: 0.7.0
   - type: dropdown
     id: device

@@ -6,12 +6,18 @@
 //
 // Usage:  SimpleDrawingPad.exe          open the board now, exit after closing it
 //         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
-//                                       the tray menu, kept in %APPDATA%\simple-drawing-pad\shortcut.txt) opens the board
-// Output: %LOCALAPPDATA%\simple-drawing-pad\drawings\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt);
+//                                       the tray menu, kept in %USERPROFILE%\simple-drawing-pad\shortcut.txt) opens the board.
+//                                       When that file does not exist, the setting of 0.7.9 and earlier is read once from
+//                                       %APPDATA%\simple-drawing-pad\shortcut.txt (read only, never written there).
+// Folder: everything is in %USERPROFILE%\simple-drawing-pad (for example C:\Users\name\simple-drawing-pad). A folder
+//         directly under the user profile is the same folder for every program that runs as the user, including the
+//         Store version of the Claude app, whose sandbox keeps new folders under AppData to itself; Explorer shows
+//         it, and OneDrive does not sync it. Up to 0.7.9 the files were under %LOCALAPPDATA% and %APPDATA%.
+// Output: %USERPROFILE%\simple-drawing-pad\drawings\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt);
 //         Esc: ...\drawings\cancelled\. A drawing is a quick note for Claude, not an archive: the folder stays on this
 //         computer (never in Pictures, which OneDrive may sync to other computers) and keeps the last 10 drawings.
 //         Every close writes ...\drawings\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
-// Helper: --tray writes %LOCALAPPDATA%\simple-drawing-pad\helper.txt whenever it registers its shortcut:
+// Helper: --tray writes %USERPROFILE%\simple-drawing-pad\helper.txt whenever it registers its shortcut:
 //         ok | taken, shortcut, process id, local time. status.ps1 reads it.
 // Build:  build.ps1 (uses the C# compiler that ships with Windows / .NET Framework 4)
 using System;
@@ -121,6 +127,16 @@ namespace SimpleDrawingPadApp
     {
         public Color Color; public float Width; public bool Eraser;
         public List<PointF> Pts = new List<PointF>(); public List<float> Pr = new List<float>();
+    }
+
+    // one folder for everything, directly under the user profile: %USERPROFILE%\simple-drawing-pad (drawings\, helper.txt,
+    // shortcut.txt; install.ps1 keeps the program in app\). A folder there is the same folder for every program that runs
+    // as the user, including the Store version of the Claude app, whose sandbox keeps new folders under AppData to
+    // itself; Explorer shows it, and OneDrive does not sync it. Up to 0.7.9 the drawings and helper.txt were under
+    // %LOCALAPPDATA% and shortcut.txt under %APPDATA%; install.ps1 moves them.
+    static class DataFolder
+    {
+        public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "simple-drawing-pad");
     }
 
     class BoardForm : Form
@@ -537,10 +553,10 @@ namespace SimpleDrawingPadApp
             base.Dispose(disposing);
             if (disposing) { if (sheetG != null) sheetG.Dispose(); sheet.Dispose(); hint.Dispose(); }
         }
-        // %LOCALAPPDATA%\simple-drawing-pad\drawings: on this computer only (Local AppData never roams or syncs)
+        // %USERPROFILE%\simple-drawing-pad\drawings: on this computer only (see DataFolder; OneDrive does not sync it)
         static string OutDir()
         {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "simple-drawing-pad", "drawings");
+            return Path.Combine(DataFolder.Root, "drawings");
         }
         // keeps the newest Keep drawings in a folder; the names sort by time (drawing_yyyyMMdd_HHmmss.png, Gregorian).
         // The drawing just saved is never deleted, even if its name sorts first (the clock was set back).
@@ -595,10 +611,12 @@ namespace SimpleDrawingPadApp
         BoardForm open;
         Keys shortcut;
 
-        // the shortcut is stored as text ("Ctrl+Alt+D") in %APPDATA%\simple-drawing-pad\shortcut.txt
-        static readonly string ConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "simple-drawing-pad", "shortcut.txt");
+        // the shortcut is stored as text ("Ctrl+Alt+D") in %USERPROFILE%\simple-drawing-pad\shortcut.txt
+        static readonly string ConfigFile = Path.Combine(DataFolder.Root, "shortcut.txt");
+        // up to 0.7.9 it was %APPDATA%\simple-drawing-pad\shortcut.txt: read once, only while the new file does not exist; never written
+        static readonly string LegacyConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "simple-drawing-pad", "shortcut.txt");
         // whether the shortcut works, for status.ps1 (Claude cannot see the balloon tip): ok | taken, shortcut, process id, local time
-        static readonly string StateFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "simple-drawing-pad", "helper.txt");
+        static readonly string StateFile = Path.Combine(DataFolder.Root, "helper.txt");
         static readonly string Pid = System.Diagnostics.Process.GetCurrentProcess().Id.ToString();
         const Keys DefaultShortcut = Keys.Control | Keys.Alt | Keys.D;
         // copy, paste and other editing keys stay with the apps: Ctrl+V must paste the drawing, not open the board
@@ -618,7 +636,12 @@ namespace SimpleDrawingPadApp
             icon.Visible = true;
             hk = new ShortcutWindow(OpenBoard);
             Keys saved = DefaultShortcut;
-            try { if (File.Exists(ConfigFile)) saved = Shortcuts.Parse(File.ReadAllText(ConfigFile)); } catch (Exception) { saved = DefaultShortcut; }
+            try
+            {
+                string from = File.Exists(ConfigFile) ? ConfigFile : LegacyConfigFile;   // the old place only until the new file exists
+                if (File.Exists(from)) saved = Shortcuts.Parse(File.ReadAllText(from));
+            }
+            catch (Exception) { saved = DefaultShortcut; }
             if (Array.IndexOf(Reserved, saved) >= 0) saved = DefaultShortcut;
             if (!Apply(saved))
                 icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format("The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".", Shortcuts.Format(saved)), ToolTipIcon.Warning);
@@ -708,7 +731,7 @@ namespace SimpleDrawingPadApp
                 if (b.Copied)
                     icon.ShowBalloonTip(4000, "Simple Drawing Pad", "Drawing copied. Paste it with Ctrl+V, e.g. in the chat.", ToolTipIcon.Info);
                 else
-                    icon.ShowBalloonTip(8000, "Simple Drawing Pad", "Drawing saved, but another program was using the clipboard, so it was not copied. It is in %LOCALAPPDATA%\\simple-drawing-pad\\drawings.", ToolTipIcon.Warning);
+                    icon.ShowBalloonTip(8000, "Simple Drawing Pad", "Drawing saved, but another program was using the clipboard, so it was not copied. It is in %USERPROFILE%\\simple-drawing-pad\\drawings.", ToolTipIcon.Warning);
             };
             open = b;
             open.Show(); open.Activate();
