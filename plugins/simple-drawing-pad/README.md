@@ -2,6 +2,8 @@
 
 **Like dictation, but drawn - a quick sketch takes your idea to Claude or any app.**
 
+Sketch a layout, wiring, a UI mockup, a diagram or a handwritten note, and Claude looks at it.
+
 Ctrl+Alt+D = draw\
 Enter = copy\
 Ctrl+V = paste
@@ -12,7 +14,7 @@ Local only, no network, collects nothing. Starts with Windows (a shortcut in you
 
 Remove it with `/simple-drawing-pad:uninstall`
 
-For Windows PCs only.
+Pen window for Windows PCs; an offline browser board elsewhere.
 
 - **Pen window (Windows).** A keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws on the sheet, with pressure, while the window is active. On pen displays and touch laptops it draws where the pen is; with no tablet it uses the mouse or trackpad. Enter copies the drawing to the clipboard and closes the window, so you can paste it into Claude, an email or any other app with Ctrl+V. In Claude Code, Claude can also pick it up by itself.
 - **Browser board (any system).** `skills/draw/assets/simple-drawing-pad.html` is one offline page with pen pressure, eraser, line widths, grid, undo, full screen and PNG export.
@@ -37,6 +39,15 @@ On Windows the pen window is a **small helper program on your computer**: a penc
 1. Add the plugin: from the Claude directory, or in Claude Code with `/plugin marketplace add szymjs/simple-drawing-pad` and `/plugin install simple-drawing-pad@simple-drawing-pad`. Start a new session.
 2. **On Windows, the first session asks you once** whether to install the helper on this computer, and explains what it is (as above). There is one way to install it: **`/simple-drawing-pad:install`**. Run it, or just answer "yes" and Claude runs it for you (approve the one installer command). It installs the helper, checks that it works and tells you. The question is not shown again on that computer; you can install later with the same command. Each Windows computer needs this step once, because the program lives on the computer.
 3. Press **Ctrl+Alt+D**, draw, press Enter, paste with **Ctrl+V**. The skill is `/simple-drawing-pad:draw`, or just ask Claude to let you draw.
+
+If you prefer typing `/draw`, add a command of your own: commands from a plugin always carry the plugin's name, so the plugin cannot register `/draw` itself. Create `C:\Users\<you>\.claude\commands\draw.md` (on other systems `~/.claude/commands/draw.md`) with:
+
+```markdown
+---
+description: Simple Drawing Pad (alias for /simple-drawing-pad:draw)
+---
+Run the skill `simple-drawing-pad:draw`. Arguments: $ARGUMENTS
+```
 
 Later, if something stops working (helper not running, shortcut taken by another program, a newer helper in a plugin update), the plugin says so once at the start of a session, with what to do.
 
