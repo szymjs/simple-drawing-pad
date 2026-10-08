@@ -10,7 +10,8 @@ Sketch a layout, wiring, a UI mockup, a diagram or a handwritten note, and Claud
 
 Ctrl+Alt+D = draw\
 Enter = copy\
-Ctrl+V = paste
+Ctrl+V = paste\
+Shift+Enter = save as
 
 Simple as that. A small helper is built on your PC from the included source (nothing downloaded, no admin rights).
 
