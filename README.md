@@ -20,7 +20,7 @@ Remove it with `/simple-drawing-pad:uninstall`
 
 Pen window for Windows PCs; an offline browser board elsewhere.
 
-- **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it; a mouse or trackpad works too. Enter copies the drawing to the clipboard; paste it with Ctrl+V.
+- **Pen window (Windows):** a keyboard shortcut (Ctrl+Alt+D by default) opens a drawing window. With a regular graphics tablet the whole tablet draws in it; a mouse or trackpad works too. Enter copies the drawing to the clipboard; paste it with Ctrl+V. Shift+Enter also saves a copy where you choose.
 - **Browser board (any system):** one offline page with pen pressure, eraser, undo and PNG export.
 
 The plugin is code and text, plus one picture: the pencil icon for its directory listing, which no code reads.

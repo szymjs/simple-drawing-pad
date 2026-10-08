@@ -1,7 +1,7 @@
 {
   "name": "simple-drawing-pad",
   "displayName": "Simple Drawing Pad",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Like dictation, but drawn - a quick sketch takes your idea to Claude or any app. Sketch a layout, wiring, a UI mockup, a diagram or a handwritten note, and Claude looks at it. Ctrl+Alt+D = draw · Enter = copy · Ctrl+V = paste. Simple as that. A small helper is built on your PC from the included source (nothing downloaded, no admin rights). Local only, no network, collects nothing. Starts with Windows (a shortcut in your Startup folder). It asks once per computer before installing, and a short local check at each session start tells Claude if it works. Remove it with /simple-drawing-pad:uninstall. Pen window for Windows PCs; an offline browser board elsewhere.",
   "author": {
     "name": "szymjs"

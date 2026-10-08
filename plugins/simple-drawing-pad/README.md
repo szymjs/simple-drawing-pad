@@ -75,6 +75,7 @@ Ask Claude why: it runs the plugin's check, `app\status.ps1`, whose last line sa
 | Backspace | undo |
 | Delete | clear the sheet |
 | Enter | copy the drawing to the clipboard, then paste it with **Ctrl+V** (closing the window with X or Alt+F4, or Exit in the tray menu, does the same) |
+| Shift+Enter | the same, after asking where to save an extra copy (Pictures by default); that copy is yours to keep and is not among the last 10 |
 | Esc | cancel: nothing goes to the clipboard; the drawing is kept in the `cancelled` folder |
 
 An empty sheet is never copied. While the window is active in tablet mode the pointer stays inside the sheet; switch away (Alt+Tab) to release it. Change the shortcut from the tray icon menu ("Change shortcut…").

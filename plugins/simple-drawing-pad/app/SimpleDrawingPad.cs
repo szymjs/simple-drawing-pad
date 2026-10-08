@@ -1,7 +1,8 @@
 // Simple Drawing Pad: a pop-up drawing window for Windows. While the window is active, the WHOLE tablet
 // surface draws into it (Wintab), regardless of how the tablet is mapped to the monitors. That is for regular
 // (opaque) tablets; pen displays and touch screens use the normal pointer and draw where the pen is.
-// Closing the window saves the sheet as PNG (and copies it to the clipboard) for Claude to read.
+// Closing the window saves the sheet as PNG (and copies it to the clipboard) for Claude to read. Shift+Enter first
+// asks where to save an extra copy (a Save as dialog), then does the same.
 // It works only on this computer: no network access, nothing is sent or collected.
 //
 // Usage:  SimpleDrawingPad.exe          open the board now, exit after closing it
@@ -17,6 +18,7 @@
 //         Esc: ...\drawings\cancelled\. A drawing is a quick note for Claude, not an archive: the folder stays on this
 //         computer (never in Pictures, which OneDrive may sync to other computers) and keeps the last 10 drawings.
 //         Every close writes ...\drawings\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
+//         Shift+Enter also writes a copy where the user chooses; that copy is theirs: not pruned, not named in status.txt.
 // Helper: --tray writes %USERPROFILE%\simple-drawing-pad\helper.txt whenever it registers its shortcut:
 //         ok | taken, shortcut, process id, local time. status.ps1 reads it.
 // Build:  build.ps1 (uses the C# compiler that ships with Windows / .NET Framework 4)
@@ -168,6 +170,7 @@ namespace SimpleDrawingPadApp
         IntPtr ctx = IntPtr.Zero;
         int maxPressure = 1023;
         public string SavedPath;
+        string saveAsPath;                  // Shift+Enter: where the extra copy goes; null otherwise
         public bool Copied;                 // false when another program kept the clipboard busy; the PNG is saved anyway
         public static string ShortcutName;   // set by the tray helper; shown in the title so people learn the shortcut
 
@@ -237,7 +240,8 @@ namespace SimpleDrawingPadApp
             x = AddButton("Space eraser", x, delegate { ToggleEraser(); });
             x = AddButton("Delete clear", x, delegate { ClearAll(); });
             x += 10;
-            x = AddButton("Enter: copy to clipboard, Ctrl+V: paste in chat", x, delegate { Close(); });
+            x = AddButton("Enter: copy to clipboard, Ctrl+V: paste in chat", x, delegate { Close(); },
+                "Shift+Enter: the same, after asking where to save an extra copy (Save as).");
             x = AddButton("Esc: cancel", x, delegate { cancelled = true; Close(); });
             status.AutoSize = true; status.Location = new Point(x + 12, 15); status.ForeColor = Color.DimGray;
             hint.ShowAlways = true;   // in tablet mode the cursor is kept on the sheet, so the tooltip shows when the board is inactive
@@ -245,11 +249,13 @@ namespace SimpleDrawingPadApp
             UpdateStatus();
         }
 
-        int AddButton(string text, int x, EventHandler onClick)
+        int AddButton(string text, int x, EventHandler onClick) { return AddButton(text, x, onClick, null); }
+        int AddButton(string text, int x, EventHandler onClick, string tip)
         {
             // GrowAndShrink: the digit buttons would otherwise keep the 75 px default width and push the status off the bar
             Button b = new Button(); b.Text = text; b.AutoSize = true; b.AutoSizeMode = AutoSizeMode.GrowAndShrink; b.MinimumSize = new Size(30, 30); b.Location = new Point(x, 9);
             b.FlatStyle = FlatStyle.System; b.Click += onClick; b.TabStop = false;
+            if (tip != null) hint.SetToolTip(b, tip);   // for a second key the button has no room for
             bar.Controls.Add(b);
             return x + b.PreferredSize.Width + 6;
         }
@@ -509,6 +515,7 @@ namespace SimpleDrawingPadApp
             if (ctrl && k == Keys.Z) { Undo(); return true; }
             if (!ctrl)
             {
+                if (shift && k == Keys.Enter) { SaveAs(); return true; }                          // Shift+Enter: Save as, then as Enter
                 // numpad with Num Lock on (NumPadN), top-row digits (DN), or numpad with Num Lock off (End, Down, ...)
                 switch (k)
                 {
@@ -530,6 +537,24 @@ namespace SimpleDrawingPadApp
                 }
             }
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        // Shift+Enter: ask where an extra copy goes (Pictures by default), then close as Enter does. The dialog deactivates
+        // the board, which frees the cursor and pauses the tablet (OnDeactivate); Cancel in the dialog returns to the sheet.
+        void SaveAs()
+        {
+            if (strokes.Count == 0) { Close(); return; }   // an empty sheet is never saved, so this is plain Enter
+            using (SaveFileDialog d = new SaveFileDialog())
+            {
+                d.Title = "Save a copy of the drawing";
+                d.Filter = "PNG image (*.png)|*.png";
+                d.DefaultExt = "png"; d.AddExtension = true; d.OverwritePrompt = true;
+                d.FileName = "drawing_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".png";
+                d.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+                if (d.ShowDialog(this) != DialogResult.OK) return;
+                saveAsPath = d.FileName;
+            }
+            Close();
         }
 
         // ---------- closing copies the drawing
@@ -575,8 +600,9 @@ namespace SimpleDrawingPadApp
             catch (Exception) { }
         }
         // Enter / close: PNG + latest.png + latest.txt + clipboard. Esc: PNG in cancelled\ only (latest.* untouched),
-        // so a stray Esc never loses a drawing. Every close ends with status.txt (copied | cancelled | empty, PNG path,
-        // local time) for Claude to wait on. Throws when saving fails.
+        // so a stray Esc never loses a drawing. Shift+Enter: also the user's own copy, before latest.* and the clipboard.
+        // Every close ends with status.txt (copied | cancelled | empty, PNG path, local time) for Claude to wait on.
+        // Throws when saving fails.
         void Save()
         {
             DateTime now = DateTime.Now;
@@ -593,6 +619,11 @@ namespace SimpleDrawingPadApp
             }
             if (state == "copied")
             {
+                if (saveAsPath != null)
+                {
+                    string copy = saveAsPath; saveAsPath = null;   // one attempt: after an error the board stays open and plain Enter still works
+                    sheet.Save(copy, ImageFormat.Png);
+                }
                 try { File.Copy(file, Path.Combine(dir, "latest.png"), true); } catch (Exception) { }   // a convenience copy; latest.txt names the real file
                 File.WriteAllText(Path.Combine(dir, "latest.txt"), file + Environment.NewLine + now.ToString("o") + Environment.NewLine);
                 try { Clipboard.SetImage(sheet); Copied = true; } catch (ExternalException) { }   // Windows retries for about a second
