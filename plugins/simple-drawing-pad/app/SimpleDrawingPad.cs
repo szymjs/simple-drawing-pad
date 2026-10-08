@@ -199,7 +199,7 @@ namespace SimpleDrawingPadApp
         {
             // the title says how to use it: open, copy, paste (install.ps1 matches titles starting "Simple Drawing Pad")
             Text = "Simple Drawing Pad  —  " + (ShortcutName != null ? string.Format("{0} opens", ShortcutName) + "  ·  " : "")
-                 + "Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app  ·  Shift+Enter saves as";
+                 + "Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app";
             KeyPreview = true;
             DoubleBuffered = true;
             Icon = AppIcon.Large;
