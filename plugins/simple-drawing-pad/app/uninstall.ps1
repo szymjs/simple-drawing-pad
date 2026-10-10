@@ -7,8 +7,10 @@
 #   .\uninstall.ps1 -Settings  the same, started from Windows Settings: the result is shown in a small message window
 # Removed: the running helper; the shortcut "Simple Drawing Pad.lnk" in the Startup folder (0.8.0); the Run values
 # simple-drawing-pad (up to 0.7.9) and drawing-board (up to 0.3.0); the Settings > Apps entry; app\ and helper.txt in
-# %USERPROFILE%\simple-drawing-pad; the program files of up to 0.7.9 in %LOCALAPPDATA%\Programs\simple-drawing-pad and
-# helper.txt in %LOCALAPPDATA%\simple-drawing-pad.
+# %USERPROFILE%\simple-drawing-pad; the program files of up to 0.7.9 in %LOCALAPPDATA%\Programs\simple-drawing-pad, or
+# the copy of the program and version.txt that install.ps1 leaves there for plugin copies of up to 0.7.9 (0.9.0), and
+# helper.txt in %LOCALAPPDATA%\simple-drawing-pad (the helper also writes its report there while that copy exists), with
+# that folder when it is empty.
 # Kept, where present: drawings\ and shortcut.txt in %USERPROFILE%\simple-drawing-pad, and the drawings and settings of older versions.
 # Written: notice.txt and no-reminder.txt in %USERPROFILE%\simple-drawing-pad, so the session-start question stays quiet.
 param([switch]$Settings)
@@ -89,7 +91,7 @@ try {
     # also when one of them is this file: PowerShell has already read all of it
     foreach ($copy in (Join-Path $dir 'uninstall.ps1'), (Join-Path $oldDir 'uninstall.ps1')) { if (Test-Path -LiteralPath $copy) { Remove-Item -LiteralPath $copy } }
     # an empty folder that is in use (for example a terminal opened in it) is left behind: it does no harm
-    foreach ($d in $dir, $oldDir) { if ((Test-Path -LiteralPath $d) -and -not (Get-ChildItem -LiteralPath $d -Force)) { Remove-Item -LiteralPath $d -ErrorAction SilentlyContinue } }
+    foreach ($d in $dir, $oldDir, $oldData) { if ((Test-Path -LiteralPath $d) -and -not (Get-ChildItem -LiteralPath $d -Force)) { Remove-Item -LiteralPath $d -ErrorAction SilentlyContinue } }
     # removed on purpose: counts as "already asked", so the session-start question does not come back on this computer;
     # no-reminder.txt says the same to a 0.5.0 copy of the plugin that may still be in another Claude app
     New-Item -ItemType Directory -Force $root | Out-Null

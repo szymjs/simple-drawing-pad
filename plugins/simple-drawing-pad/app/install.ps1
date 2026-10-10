@@ -14,6 +14,11 @@
 # An install of 0.5.1-0.7.9 (program in %LOCALAPPDATA%\Programs\simple-drawing-pad, data in %LOCALAPPDATA%\simple-drawing-pad,
 # shortcut setting in %APPDATA%\simple-drawing-pad) is moved there: its drawings and its setting are taken along; its
 # program files, helper.txt, notice files, Run value and emptied folders are removed. The setting file itself stays.
+# Its SimpleDrawingPad.exe and version.txt are replaced by a copy of the new program and the new version (0.9.0), so a
+# plugin copy of up to 0.7.9 that is still in another Claude app finds a newer program there and only starts it; that
+# copy ends at once while the helper runs (one helper per user). While that copy exists, the helper also writes its
+# report to %LOCALAPPDATA%\simple-drawing-pad\helper.txt, where such a plugin copy looks for it, so it sees the helper
+# running. uninstall.ps1 removes both with the rest.
 # The program is also listed in Windows Settings > Apps, for this user only; its Uninstall button runs the copy of
 # uninstall.ps1 next to the program. Windows shows that entry when this script ran outside the Store app's sandbox
 # (claude in a terminal, the EXE desktop app) and not otherwise; /simple-drawing-pad:uninstall works either way.
@@ -126,63 +131,76 @@ Stop-Helper   # before the build, so a helper started from bin\ cannot lock the 
 if ($keep) {
     "The installed program ($b) is newer than this copy of the plugin ($a), so it is kept and only started."
 } else {
-    # a failed build leaves the installed program as it was: start it again, so the shortcut keeps working
-    try { & (Join-Path $here 'build.ps1') }
-    catch {
+    # when a step below fails (the build, the copy, the version files, the Settings > Apps entry), the helper stopped
+    # above is started again (the installed program, else the one of up to 0.7.9), so the shortcut keeps working
+    try {
+        & (Join-Path $here 'build.ps1')
+        New-Item -ItemType Directory -Force $dir | Out-Null
+        Copy-Item -LiteralPath $bin -Destination $exe -Force
+        Copy-Item -LiteralPath (Join-Path $here 'uninstall.ps1') -Destination $uninstaller -Force
+        [IO.File]::WriteAllText($hashFile, (Get-SourceHash @((Join-Path $here 'SimpleDrawingPad.cs'), (Join-Path $here 'build.ps1'), (Join-Path $here 'uninstall.ps1'))))   # one line: 0.5.0 compares the whole file
+        if ($version) { [IO.File]::WriteAllText($versionFile, $version) } elseif (Test-Path -LiteralPath $versionFile) { Remove-Item -LiteralPath $versionFile }
+        # an install of up to 0.7.9 moves here: its drawings file by file, its shortcut setting once (when there is none here
+        # yet); then its program files, the report of the helper stopped above, its notice files (this install asks afresh)
+        # and the emptied folders go. The new program works without this step, so a problem here is only reported
+        try {
+            Move-OldFiles (Join-Path $oldData 'drawings\cancelled') (Join-Path $drawings 'cancelled')
+            Move-OldFiles (Join-Path $oldData 'drawings') $drawings
+            if (-not (Test-Path -LiteralPath $settingFile)) {
+                foreach ($f in (Join-Path $oldSettings 'shortcut.txt'), (Join-Path $oldSettings 'hotkey.txt')) {
+                    if (Test-Path -LiteralPath $f) { Copy-Item -LiteralPath $f -Destination $settingFile -Force; break }
+                }
+            }
+            foreach ($f in (Join-Path $oldDir 'uninstall.ps1'), (Join-Path $oldDir 'source.sha256'),
+                           (Join-Path $oldData 'helper.txt'), (Join-Path $oldData 'notice.txt'), (Join-Path $oldData 'no-reminder.txt'),
+                           (Join-Path $oldData 'drawings\latest.png'), (Join-Path $oldData 'drawings\latest.txt'), (Join-Path $oldData 'drawings\status.txt')) {
+                if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f }
+            }
+            # the old program is replaced by a copy of the new one, and its version.txt by the new version: a plugin copy of
+            # up to 0.7.9 (for example in another Claude app that has not updated yet) reads only this folder, finds a newer
+            # program and only starts it, and that copy ends at once while the helper runs (one helper per user); without it,
+            # that plugin copy would install itself again next to this one. Overwritten, not deleted first, so a failed copy
+            # leaves the old program in place and the next install tries again. While this copy exists, the helper also writes
+            # its report to $oldData\helper.txt, so that plugin copy sees it running (it does not look in app\). uninstall.ps1
+            # removes both
+            if (Test-Path -LiteralPath $oldExe) {
+                Copy-Item -LiteralPath $exe -Destination $oldExe -Force
+                if ($version) { [IO.File]::WriteAllText((Join-Path $oldDir 'version.txt'), $version) }
+            }
+            foreach ($d in $oldDir, (Join-Path $oldData 'drawings\cancelled'), (Join-Path $oldData 'drawings'), $oldData) {
+                if ((Test-Path -LiteralPath $d) -and -not (Get-ChildItem -LiteralPath $d -Force)) { Remove-Item -LiteralPath $d -ErrorAction SilentlyContinue }
+            }
+        } catch {
+            # names only the folders of the previous version that are still there: after its uninstall only the data folder is
+            $left = @($oldData, $oldDir | Where-Object { Test-Path -LiteralPath $_ }) -join ' and '
+            if (-not $left) { $left = 'its folders' }
+            "WARNING: not everything of the previous version was moved from $left to ${root}: $($_.Exception.Message) The new program works; /simple-drawing-pad:install tries the move again."
+        }
+        # listed in Windows Settings > Apps, for this user only (no admin rights). Its Uninstall button runs the copy of
+        # uninstall.ps1 next to the program, so it works even after the plugin is removed from Claude. Windows shows the
+        # entry when this script runs outside the Store app's sandbox (claude in a terminal, the EXE desktop app); inside
+        # it, the key lands in the sandbox's private registry and the entry does not appear. The final message says so.
+        $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        New-Item -Path $entry -Force | Out-Null
+        $values = [ordered]@{
+            DisplayName     = 'Simple Drawing Pad'
+            DisplayVersion  = $version
+            Publisher       = 'szymjs'
+            Comments        = 'Helper program of the Simple Drawing Pad plugin for Claude. Works only on this computer, without the network.'
+            DisplayIcon     = $exe
+            InstallLocation = $dir
+            InstallDate     = (Get-Date).ToString('yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture)
+            URLInfoAbout    = 'https://github.com/szymjs/simple-drawing-pad'
+            UninstallString = '"{0}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" -Settings' -f $ps, $uninstaller
+        }
+        foreach ($k in $values.Keys) { if ($values[$k]) { New-ItemProperty -LiteralPath $entry -Name $k -Value $values[$k] -PropertyType String -Force | Out-Null } }
+        $kb = [int][Math]::Ceiling(((Get-Item -LiteralPath $exe).Length + (Get-Item -LiteralPath $uninstaller).Length) / 1KB)
+        foreach ($v in @(@('NoModify', 1), @('NoRepair', 1), @('EstimatedSize', $kb))) { New-ItemProperty -LiteralPath $entry -Name $v[0] -Value $v[1] -PropertyType DWord -Force | Out-Null }
+    } catch {
         if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe -ArgumentList '--tray' -WorkingDirectory $dir | Out-Null }
         elseif (Test-Path -LiteralPath $oldExe) { Start-Process -FilePath $oldExe -ArgumentList '--tray' -WorkingDirectory $oldDir | Out-Null }
         throw
     }
-    New-Item -ItemType Directory -Force $dir | Out-Null
-    Copy-Item -LiteralPath $bin -Destination $exe -Force
-    Copy-Item -LiteralPath (Join-Path $here 'uninstall.ps1') -Destination $uninstaller -Force
-    [IO.File]::WriteAllText($hashFile, (Get-SourceHash @((Join-Path $here 'SimpleDrawingPad.cs'), (Join-Path $here 'build.ps1'), (Join-Path $here 'uninstall.ps1'))))   # one line: 0.5.0 compares the whole file
-    if ($version) { [IO.File]::WriteAllText($versionFile, $version) } elseif (Test-Path -LiteralPath $versionFile) { Remove-Item -LiteralPath $versionFile }
-    # an install of up to 0.7.9 moves here: its drawings file by file, its shortcut setting once (when there is none here
-    # yet); then its program files, the report of the helper stopped above, its notice files (this install asks afresh)
-    # and the emptied folders go. The new program works without this step, so a problem here is only reported
-    try {
-        Move-OldFiles (Join-Path $oldData 'drawings\cancelled') (Join-Path $drawings 'cancelled')
-        Move-OldFiles (Join-Path $oldData 'drawings') $drawings
-        if (-not (Test-Path -LiteralPath $settingFile)) {
-            foreach ($f in (Join-Path $oldSettings 'shortcut.txt'), (Join-Path $oldSettings 'hotkey.txt')) {
-                if (Test-Path -LiteralPath $f) { Copy-Item -LiteralPath $f -Destination $settingFile -Force; break }
-            }
-        }
-        foreach ($f in $oldExe, (Join-Path $oldDir 'uninstall.ps1'), (Join-Path $oldDir 'source.sha256'), (Join-Path $oldDir 'version.txt'),
-                       (Join-Path $oldData 'helper.txt'), (Join-Path $oldData 'notice.txt'), (Join-Path $oldData 'no-reminder.txt'),
-                       (Join-Path $oldData 'drawings\latest.png'), (Join-Path $oldData 'drawings\latest.txt'), (Join-Path $oldData 'drawings\status.txt')) {
-            if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f }
-        }
-        foreach ($d in $oldDir, (Join-Path $oldData 'drawings\cancelled'), (Join-Path $oldData 'drawings'), $oldData) {
-            if ((Test-Path -LiteralPath $d) -and -not (Get-ChildItem -LiteralPath $d -Force)) { Remove-Item -LiteralPath $d -ErrorAction SilentlyContinue }
-        }
-    } catch {
-        # names only the folders of the previous version that are still there: after its uninstall only the data folder is
-        $left = @($oldData, $oldDir | Where-Object { Test-Path -LiteralPath $_ }) -join ' and '
-        if (-not $left) { $left = 'its folders' }
-        "WARNING: not everything of the previous version was moved from $left to ${root}: $($_.Exception.Message) The new program works; /simple-drawing-pad:install tries the move again."
-    }
-    # listed in Windows Settings > Apps, for this user only (no admin rights). Its Uninstall button runs the copy of
-    # uninstall.ps1 next to the program, so it works even after the plugin is removed from Claude. Windows shows the
-    # entry when this script runs outside the Store app's sandbox (claude in a terminal, the EXE desktop app); inside
-    # it, the key lands in the sandbox's private registry and the entry does not appear. The final message says so.
-    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    New-Item -Path $entry -Force | Out-Null
-    $values = [ordered]@{
-        DisplayName     = 'Simple Drawing Pad'
-        DisplayVersion  = $version
-        Publisher       = 'szymjs'
-        Comments        = 'Helper program of the Simple Drawing Pad plugin for Claude. Works only on this computer, without the network.'
-        DisplayIcon     = $exe
-        InstallLocation = $dir
-        InstallDate     = (Get-Date).ToString('yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture)
-        URLInfoAbout    = 'https://github.com/szymjs/simple-drawing-pad'
-        UninstallString = '"{0}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" -Settings' -f $ps, $uninstaller
-    }
-    foreach ($k in $values.Keys) { if ($values[$k]) { New-ItemProperty -LiteralPath $entry -Name $k -Value $values[$k] -PropertyType String -Force | Out-Null } }
-    $kb = [int][Math]::Ceiling(((Get-Item -LiteralPath $exe).Length + (Get-Item -LiteralPath $uninstaller).Length) / 1KB)
-    foreach ($v in @(@('NoModify', 1), @('NoRepair', 1), @('EstimatedSize', $kb))) { New-ItemProperty -LiteralPath $entry -Name $v[0] -Value $v[1] -PropertyType DWord -Force | Out-Null }
 }
 # installed (again): start fresh, so a later problem gets its one session-start notice; the notice files of up to 0.7.9
 # count for status.ps1 too, so they go as well, also when the installed program is kept and the move above is skipped
