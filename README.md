@@ -80,3 +80,5 @@ Please do not attach drawings, screenshots or paths that show private informatio
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+Wacom is a trademark of Wacom Co., Ltd. Simple Drawing Pad is not affiliated with or endorsed by Wacom, and it contains and distributes no Wacom software: on Windows it uses the Wintab interface of the tablet driver you already have installed.
