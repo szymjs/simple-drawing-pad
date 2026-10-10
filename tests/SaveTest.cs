@@ -25,6 +25,9 @@ static class SaveTest
     }
     static void SetSaveAs(Type t, object board, string path) { t.GetField("saveAsPath", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(board, path); }
     static string GetSaveAs(Type t, object board) { return (string)t.GetField("saveAsPath", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(board); }
+    // the copy's path when it could not be written (shown in the warning when the board closes), else null
+    static string GetSaveAsFailed(Type t, object board) { return (string)t.GetField("saveAsFailed", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(board); }
+    static int Drawings(string drawings) { return Directory.GetFiles(drawings, "drawing_*.png").Length; }
     static Exception CallSave(Type t, object board)
     {
         try { t.GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(board, null); return null; }
@@ -60,6 +63,7 @@ static class SaveTest
         Check(File.ReadAllText(Path.Combine(drawings, "latest.txt")).StartsWith(st[1]), "latest.txt names the drawings\\ PNG");
         Check(IsPng(Path.Combine(drawings, "latest.png")), "latest.png exists");
         Check(GetSaveAs(t, b1) == null, "saveAsPath is reset to null after the save");
+        Check(GetSaveAsFailed(t, b1) == null, "no copy failure is recorded");
         Check(e1 == null || e1 is System.Runtime.InteropServices.ExternalException, "no exception, or only the clipboard's ExternalException (is caught in the program)");
 
         Console.WriteLine("\n2. Plain Enter path: a stroke, no saveAsPath, Save()");
@@ -71,14 +75,22 @@ static class SaveTest
         Check(Directory.GetFiles(copyDir, "*.png").Length == before, "no extra copy was written");
         Check(e2 == null || e2 is System.Runtime.InteropServices.ExternalException, "no exception beyond the clipboard's");
 
-        Console.WriteLine("\n3. Copy to an unwritable place: Save() must throw, saveAsPath cleared, next plain Save() works");
-        object b3 = NewBoard(a, out t); AddStroke(a, t, b3); SetSaveAs(t, b3, "/nonexistent-dir/x/y.png");
+        Console.WriteLine("\n3. Copy to an unwritable place: the drawing is still saved and sent, the failure is recorded, nothing is saved twice");
+        // the copy is written last, in its own try: Save() does not throw, so OnFormClosing only warns (naming the path)
+        // and the board closes; there is no retry that would save the same sheet again under a new name
+        Directory.Delete(drawings, true);
+        string bad = "/nonexistent-dir/x/y.png";
+        object b3 = NewBoard(a, out t); AddStroke(a, t, b3); SetSaveAs(t, b3, bad);
         Exception e3 = CallSave(t, b3);
-        Check(e3 != null && !(e3 is System.Runtime.InteropServices.ExternalException), "Save() threw (" + (e3 == null ? "nothing" : e3.GetType().Name) + ")");
-        Check(GetSaveAs(t, b3) == null, "saveAsPath cleared after the failed attempt");
-        Exception e3b = CallSave(t, b3);
+        Console.WriteLine("  Save() threw: " + (e3 == null ? "nothing" : e3.GetType().Name + ": " + e3.Message));
+        Check(e3 == null || e3 is System.Runtime.InteropServices.ExternalException, "Save() did not throw (beyond the clipboard's ExternalException), so the close is not cancelled");
         st = Status(drawings);
-        Check((e3b == null || e3b is System.Runtime.InteropServices.ExternalException) && st[0] == "copied", "the second, plain Save() succeeds and writes status.txt");
+        Check(st[0] == "copied" && IsPng(st[1]), "status.txt says copied and names the drawings\\ PNG");
+        Check(File.ReadAllText(Path.Combine(drawings, "latest.txt")).StartsWith(st[1]), "latest.txt names the drawings\\ PNG");
+        Check(IsPng(Path.Combine(drawings, "latest.png")), "latest.png exists");
+        Check(GetSaveAs(t, b3) == null, "saveAsPath cleared after the failed attempt");
+        Check(GetSaveAsFailed(t, b3) == bad, "the failed copy's path is recorded for the warning (got '" + GetSaveAsFailed(t, b3) + "')");
+        Check(Drawings(drawings) == 1, "drawings\\ holds a single drawing (got " + Drawings(drawings) + ")");
 
         Console.WriteLine("\n4. Empty sheet with saveAsPath set: nothing is copied, status is 'empty'");
         string copy4 = Path.Combine(copyDir, "should-not-exist.png");

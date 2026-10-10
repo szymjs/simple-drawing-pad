@@ -7,22 +7,44 @@
 <style>
   :root { --bg: #f7f7f4; --ink: #1d1d1f; --bar: #ffffff; --line: #d9d9d4; --accent: #2563eb; --muted: #6b6b70; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); font: 14px system-ui, "Segoe UI", sans-serif; color: var(--ink); overflow: hidden; }
-  #bar { position: fixed; top: 0; left: 0; right: 0; min-height: 52px; display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--bar); border-bottom: 1px solid var(--line); z-index: 2; flex-wrap: wrap; }
-  #bar button { height: 34px; min-width: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; }
+  html, body { margin: 0; height: 100%; background: var(--bg); font: 14px system-ui, "Segoe UI", sans-serif; color: var(--ink); overflow: hidden; overscroll-behavior: none; }
+  #bar { position: fixed; top: 0; left: 0; right: 0; min-height: 52px; display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--bar); border-bottom: 1px solid var(--line); z-index: 2; flex-wrap: wrap; touch-action: none; }
+  #bar button { height: 34px; min-width: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; white-space: nowrap; }
   #bar button.on { border-color: var(--accent); box-shadow: 0 0 0 2px #2563eb33; }
+  #bar button[hidden] { display: none; }
+  #copy { border-color: var(--accent); }
   .sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
   .sw.on { box-shadow: 0 0 0 2px var(--accent); }
   .sep { width: 1px; height: 28px; background: var(--line); margin: 0 4px; }
+  .dot { display: none; border-radius: 50%; background: var(--ink); vertical-align: middle; }
   #hint { margin-left: auto; color: var(--muted); font-size: 12px; }
   canvas { position: fixed; left: 0; touch-action: none; cursor: crosshair; background: var(--bg); }
   canvas.grid { background-image: linear-gradient(#e4e4de 1px, transparent 1px), linear-gradient(90deg, #e4e4de 1px, transparent 1px); background-size: 32px 32px; }
+  #toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 14px; border-radius: 10px; background: #1d1d1fe6; color: #fff; font-size: 13px; line-height: 1.4; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; z-index: 3; }
+  #toast.show { opacity: 1; }
+  #shot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: #1d1d1fcc; z-index: 4; }
+  #shot[hidden] { display: none; }
+  #shot img { display: block; max-width: 100%; max-height: 70vh; background: #fff; border-radius: 6px; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
+  #shot p { margin: 0; max-width: 520px; color: #fff; text-align: center; line-height: 1.4; }
+  #shot button { height: 36px; padding: 0 18px; border: 0; border-radius: 8px; background: #fff; color: var(--ink); font: inherit; cursor: pointer; }
+  /* phones and narrow panes: one compact row (scrolls sideways if needed), icons only, Copy first, so the canvas gets the rest */
+  @media (max-width: 600px) {
+    #bar { min-height: 44px; gap: 4px; padding: 5px 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
+    #bar::-webkit-scrollbar { display: none; }
+    #bar > * { flex: none; }
+    #bar button { height: 32px; min-width: 32px; padding: 0 6px; }
+    #bar .tx, .sep, #hint { display: none; }
+    #copy .tx { display: inline; }
+    #copy { order: -1; }
+    .sw { width: 22px; height: 22px; }
+    .dot { display: inline-block; }
+  }
 </style>
 </head>
 <body>
 <div id="bar">
-  <button id="pen" class="on" data-i18n="pen"></button>
-  <button id="eraser" data-i18n="eraser"></button>
+  <button id="pen" class="on"><span class="ic">✏️</span> <span class="tx" data-i18n="pen"></span></button>
+  <button id="eraser"><span class="ic">🧽</span> <span class="tx" data-i18n="eraser"></span></button>
   <span class="sep"></span>
   <span class="sw on" data-c="#1d1d1f" style="background:#1d1d1f"></span>
   <span class="sw" data-c="#d62828" style="background:#d62828"></span>
@@ -30,30 +52,70 @@
   <span class="sw" data-c="#15803d" style="background:#15803d"></span>
   <span class="sw" data-c="#ea8a00" style="background:#ea8a00"></span>
   <span class="sep"></span>
-  <button class="sz" data-s="2" data-i18n="thin"></button>
-  <button class="sz on" data-s="4" data-i18n="medium"></button>
-  <button class="sz" data-s="9" data-i18n="thick"></button>
+  <button class="sz" data-s="2"><i class="dot" style="width:4px;height:4px"></i><span class="tx" data-i18n="thin"></span></button>
+  <button class="sz on" data-s="4"><i class="dot" style="width:7px;height:7px"></i><span class="tx" data-i18n="medium"></span></button>
+  <button class="sz" data-s="9"><i class="dot" style="width:12px;height:12px"></i><span class="tx" data-i18n="thick"></span></button>
   <span class="sep"></span>
-  <button id="grid" data-i18n="grid"></button>
-  <button id="undo" data-i18n="undo"></button>
-  <button id="clear" data-i18n="clear"></button>
-  <button id="save" data-i18n="save"></button>
-  <button id="full" data-i18n="full"></button>
-  <span id="hint" data-i18n="hint"></span>
+  <button id="grid"><span class="ic">▦</span> <span class="tx" data-i18n="grid"></span></button>
+  <button id="undo"><span class="ic">↶</span> <span class="tx" data-i18n="undo"></span></button>
+  <button id="clear"><span class="ic">🗑</span> <span class="tx" data-i18n="clear"></span></button>
+  <button id="copy"><span class="ic">📋</span> <span class="tx" data-i18n="copy"></span></button>
+  <button id="save"><span class="ic">💾</span> <span class="tx" data-i18n="save"></span></button>
+  <button id="full"><span class="ic">⛶</span> <span class="tx" data-i18n="full"></span></button>
+  <span id="hint"></span>
 </div>
 <canvas id="c"></canvas>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="shot" hidden><img alt=""><p></p><button id="shotClose" data-i18n="close"></button></div>
 <script>
-// Simple Drawing Pad: a pressure-sensitive drawing pad for sketching ideas to Claude. No network, no storage.
-const L = { pen: '✏️ Pen', eraser: '🧽 Eraser', thin: 'thin', medium: 'medium', thick: 'thick', grid: '▦ Grid', undo: '↶ Undo',
-  clear: '🗑 Clear', save: '💾 PNG', full: '⛶ Full screen', exitFull: '⛶ Exit full screen', hint: 'Draw, then tell Claude "done".', confirm: 'Clear the whole drawing?',
-  tPen: 'Pen (P)', tEraser: 'Eraser (E). The back end of a pen also erases.', tGrid: 'Grid (G)', tUndo: 'Undo (Ctrl+Z)', tSave: 'Save as PNG', tFull: 'Full screen (F): bigger board' };
+// Simple Drawing Pad: a pressure-sensitive drawing pad for sketching ideas to Claude. One offline file: no network, no storage.
+// The drawing leaves the page only when the user asks: Copy puts it on the clipboard, Save picture downloads a PNG
+// (inside a frame it shows the picture instead, because a download there can replace the board), and where either is blocked
+// (artifact sandbox, phone) the picture is shown so the user can long-press it or take a screenshot. Clear can be undone, so it asks nothing.
+const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+const touch = matchMedia('(pointer: coarse)').matches; // a finger is the main pointer (phone, tablet): no keyboard shortcuts in messages
+const K = isMac ? {undo: '⌘Z', redo: '⇧⌘Z', paste: '⌘V'} : {undo: 'Ctrl+Z', redo: 'Ctrl+Y', paste: 'Ctrl+V'};
+const L = { pen: 'Pen', eraser: 'Eraser', thin: 'thin', medium: 'medium', thick: 'thick', grid: 'Grid', undo: 'Undo',
+  clear: 'Clear', copy: 'Copy', save: 'Save picture', full: 'Full screen', exitFull: 'Exit full screen', close: 'Close',
+  cleared: 'Cleared. Undo brings it back.',
+  hintDone: 'Draw, then tell Claude "done" (in a normal browser window, take a screenshot and attach it).',
+  hintDoneCopy: 'Draw, then click Copy and paste it into the chat (in Claude Code\'s browser panel, "done" is enough).',
+  hintClick: 'Draw, then click Copy and paste it into the chat.',
+  hintTap: 'Draw, then tap Copy and paste it into the chat.',
+  hintShot: 'Draw, then take a screenshot and attach it to the chat.',
+  trackpad: 'On a trackpad, press and hold (or double-tap and drag) while you move. A thicker pen (key 3) is easier to see.',
+  empty: 'Nothing drawn yet.',
+  copied: touch ? 'Copied. Now long-press the chat box and choose Paste. If nothing pastes, take a screenshot and attach it.'
+    : 'Copied. Now paste it into the chat (' + K.paste + ').',
+  copyBlocked: 'Copy is blocked here. Long-press the picture (or right-click it) and choose Copy, or take a screenshot and attach it.',
+  shotFail: 'The picture could not be made here. Take a screenshot and attach it to the chat.',
+  saved: 'Saved {f} to your Downloads folder (or wherever your browser saves files).',
+  saveCheck: 'If {f} did not download, long-press the picture and choose Save to Photos, or right-click it and choose Save image as.',
+  saveBlocked: 'Saving a file is blocked here. Long-press the picture and choose Save to Photos, or right-click it and choose Save image as.',
+  saveEmbedded: 'Long-press the picture and choose Save to Photos, or right-click it and choose Save image as.',
+  fsFail: 'Full screen is not available here.',
+  tPen: 'Pen (P)', tEraser: 'Eraser (E). The back end of a pen also erases.', tGrid: 'Grid (G)', tUndo: 'Undo (' + K.undo + '). Redo: ' + K.redo,
+  tClear: 'Clear the whole drawing (Undo brings it back)', tCopy: 'Copy the picture, then paste it into the chat (C)', tSave: 'Save the picture as a PNG file', tFull: 'Full screen (F): bigger board' };
 document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = L[el.dataset.i18n]);
-const tips = {pen: 'tPen', eraser: 'tEraser', grid: 'tGrid', undo: 'tUndo', save: 'tSave', full: 'tFull'};
+const tips = {pen: 'tPen', eraser: 'tEraser', grid: 'tGrid', undo: 'tUndo', clear: 'tClear', copy: 'tCopy', save: 'tSave', full: 'tFull'};
 for (const [id, k] of Object.entries(tips)) document.getElementById(id).title = L[k];
+// the compact toolbar hides the words, so every button keeps an accessible name, and the size buttons a tooltip with their key (1, 2, 3)
+document.querySelectorAll('#bar button').forEach(b => { const t = b.querySelector('.tx'); if (t) { b.setAttribute('aria-label', t.textContent); if (!b.title) b.title = t.textContent; } });
+document.querySelectorAll('.sz').forEach((b, i) => b.title += ' (' + (i + 1) + ')');
+
+// where the page runs decides how the drawing gets back to Claude
+const embedded = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+const compact = () => matchMedia('(max-width: 600px)').matches;
+const canCopy = !!(window.isSecureContext && navigator.clipboard && navigator.clipboard.write && window.ClipboardItem);
+// "done" is enough only in Claude Code's browser pane, which shows this local page (file:, or a data: snapshot) and can take a screenshot of it;
+// elsewhere Copy is the way back, or a screenshot where the browser has no clipboard for images
+const local = !embedded && /^(file|data):$/.test(location.protocol);
+const hint = local ? (canCopy ? L.hintDoneCopy : L.hintDone) : !canCopy ? L.hintShot : touch ? L.hintTap : L.hintClick;
+document.getElementById('hint').textContent = hint;
 
 const bar = document.getElementById('bar'), cv = document.getElementById('c'), ctx = cv.getContext('2d');
 let color = '#1d1d1f', size = 4, mode = 'pen', barH = 52;
-const strokes = [];
+const strokes = [], undone = [];
 let cur = null;
 
 function resize() {
@@ -65,43 +127,67 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   redraw();
 }
-// draws the segments of a stroke from point `from` on (all of it when `from` is left out)
-function drawStroke(s, from) {
-  ctx.save();
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.globalCompositeOperation = s.mode === 'eraser' ? 'destination-out' : 'source-over';
-  ctx.strokeStyle = s.color;
+// draws the segments of a stroke from point `from` on (all of it when `from` is left out), on the board or on context `c`
+function drawStroke(s, from, c = ctx) {
+  c.save();
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.globalCompositeOperation = s.mode === 'eraser' ? 'destination-out' : 'source-over';
+  c.strokeStyle = s.color;
   const p = s.pts;
-  if (p.length === 1) { ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(p[0][0], p[0][1], s.mode === 'eraser' ? s.size * 2.5 : s.size * p[0][2] / 2 + .5, 0, 7); ctx.fill(); }
+  if (p.length === 1) { c.fillStyle = s.color; c.beginPath(); c.arc(p[0][0], p[0][1], s.mode === 'eraser' ? s.size * 2.5 : s.size * p[0][2] / 2 + .5, 0, 7); c.fill(); }
   for (let i = from || 1; i < p.length; i++) {
-    ctx.lineWidth = s.mode === 'eraser' ? s.size * 5 : Math.max(.6, s.size * (p[i][2] * 1.4 + .2));
-    ctx.beginPath(); ctx.moveTo(p[i - 1][0], p[i - 1][1]); ctx.lineTo(p[i][0], p[i][1]); ctx.stroke();
+    c.lineWidth = s.mode === 'eraser' ? s.size * 5 : Math.max(.6, s.size * (p[i][2] * 1.4 + .2));
+    c.beginPath(); c.moveTo(p[i - 1][0], p[i - 1][1]); c.lineTo(p[i][0], p[i][1]); c.stroke();
   }
-  ctx.restore();
+  c.restore();
 }
+// a Clear is kept as a marker {clear: [the strokes it removed]} at the start of `strokes`, so Undo can bring them back;
+// drawn() is what the board shows: the strokes without that marker
+const drawn = () => strokes.filter(s => !s.clear);
 function redraw() {
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); ctx.restore();
   // the canvas holds only ink; paper and grid are its CSS background, so the eraser never removes them
-  strokes.forEach(s => drawStroke(s));
+  drawn().forEach(s => drawStroke(s));
 }
 // mouse and touch get a fixed width; a pen uses its pressure (needs Windows Ink on Wacom tablets)
 function pressure(e) { return e.pointerType === 'pen' ? (e.pressure || .5) : .55; }
+// drops the stroke in progress without keeping it for redo (a palm, or the first finger of a two-finger gesture),
+// and gives back the redo stack that the stroke set aside when it started
+function dropCurrent() {
+  const i = strokes.lastIndexOf(cur); if (i >= 0) strokes.splice(i, 1);
+  if (cur && cur.redo) undone.push(...cur.redo);
+  cur = null; redraw();
+}
+// palm rejection: once a pen has been seen, touches never draw; a pen replaces a touch stroke; a second finger cancels it
+let penSeen = false;
+const touches = new Set();
 // one pointer per stroke; only the primary button or the pen's eraser end draws
 cv.addEventListener('pointerdown', e => {
-  if (cur || (e.button !== 0 && !(e.buttons & 32))) return;
-  cv.setPointerCapture(e.pointerId);
+  if (e.pointerType === 'pen') penSeen = true;
+  if (e.pointerType === 'touch') {
+    touches.add(e.pointerId);
+    if (penSeen) return;
+    if (touches.size > 1) { if (cur && cur.type === 'touch') dropCurrent(); return; }
+  }
+  if (cur) { if (e.pointerType === 'pen' && cur.type === 'touch') dropCurrent(); else return; }
+  if (e.button !== 0 && !(e.buttons & 32)) return;
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is already gone; the stroke still starts */ }
   const eraserTip = e.pointerType === 'pen' && (e.buttons & 32);
-  cur = {id: e.pointerId, mode: eraserTip ? 'eraser' : mode, color, size, pts: [[e.offsetX, e.offsetY, pressure(e)]]};
+  // a new stroke ends redo, but the redo stack stays on the stroke until it is lifted, in case palm rejection drops it
+  cur = {id: e.pointerId, type: e.pointerType, mode: eraserTip ? 'eraser' : mode, color, size, pts: [[e.offsetX, e.offsetY, pressure(e)]], redo: undone.splice(0)};
   strokes.push(cur); drawStroke(cur);
 });
 cv.addEventListener('pointermove', e => {
+  if (e.pointerType === 'pen') penSeen = true; // a hovering pen counts too
   if (!cur || e.pointerId !== cur.id) return;
   const n = cur.pts.length, evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
   for (const ev of evs) cur.pts.push([ev.offsetX, ev.offsetY, pressure(ev)]);
   drawStroke(cur, n); // only the new segments
 });
-['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => cv.addEventListener(t, e => { if (cur && e.pointerId === cur.id) cur = null; }));
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => cv.addEventListener(t, e => { touches.delete(e.pointerId); if (cur && e.pointerId === cur.id) { delete cur.redo; cur = null; } }));
 cv.addEventListener('contextmenu', e => e.preventDefault());
+// reloading or closing the tab would lose the drawing, which lives only in memory (also a cleared one, which Undo can still bring back)
+addEventListener('beforeunload', e => { if (strokes.length) { e.preventDefault(); e.returnValue = ''; } });
 
 const $ = id => document.getElementById(id);
 // toolbar buttons never keep focus, so a later Space or Enter cannot repeat them
@@ -113,28 +199,129 @@ $('eraser').onclick = () => setMode('eraser');
 document.querySelectorAll('.sw').forEach(el => el.onclick = () => { color = el.dataset.c; document.querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === el)); setMode('pen'); });
 document.querySelectorAll('.sz').forEach(el => el.onclick = () => { size = +el.dataset.s; document.querySelectorAll('.sz').forEach(x => x.classList.toggle('on', x === el)); });
 $('grid').onclick = () => $('grid').classList.toggle('on', cv.classList.toggle('grid'));
-$('undo').onclick = () => { strokes.pop(); cur = null; redraw(); };
-$('clear').onclick = () => { if (strokes.length && confirm(L.confirm)) { strokes.length = 0; cur = null; redraw(); } };
-// the PNG gets a white background and no grid; its name uses local time
-$('save').onclick = () => {
-  const out = document.createElement('canvas'), o = out.getContext('2d'), d = new Date();
-  out.width = cv.width; out.height = cv.height;
-  o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height); o.drawImage(cv, 0, 0);
-  const a = document.createElement('a');
-  a.download = 'drawing_' + new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
-  a.href = out.toDataURL('image/png'); a.click();
+// undoing a Clear puts its strokes back; redoing it clears them again
+function undo() {
+  const s = strokes.pop();
+  if (s) { delete s.redo; if (s.clear) strokes.push(...s.clear); undone.push(s); }
+  cur = null; redraw();
+}
+function redo() {
+  if (!undone.length) return;
+  const s = undone.pop();
+  if (s.clear) s.clear = strokes.splice(0);
+  strokes.push(s); cur = null; redraw();
+}
+$('undo').onclick = undo;
+// Clear asks nothing (a sandboxed frame may refuse confirm() without a word); it can be undone instead
+$('clear').onclick = () => {
+  if (!drawn().length) return;
+  strokes.push({clear: strokes.splice(0)}); undone.length = 0; cur = null; redraw(); toast(L.cleared);
 };
-// full screen: a bigger board
-$('full').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
-document.addEventListener('fullscreenchange', () => { $('full').textContent = document.fullscreenElement ? L.exitFull : L.full; resize(); });
+
+// messages: a short toast, or the picture itself for the user to long-press, right-click or take a screenshot of
+let toastTimer = 0;
+function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || 4000); }
+function showShot(url, msg) { $('shot').querySelector('img').src = url; $('shot').querySelector('p').textContent = msg; $('shot').hidden = false; }
+function closeShot() { $('shot').hidden = true; $('shot').querySelector('img').removeAttribute('src'); }
+$('shotClose').onclick = closeShot;
+$('shot').addEventListener('click', e => { if (e.target === $('shot')) closeShot(); });
+
+// the picture holds the whole drawing, also ink outside a window that got smaller since; white background, no grid.
+// Each picture is a full-size canvas, and Safari stops handing out canvases once too much memory is in use,
+// so every scratch canvas is emptied as soon as it is done with, and a refusal throws instead of failing quietly.
+function picture() {
+  const dpr = window.devicePixelRatio || 1, list = drawn();
+  let w = innerWidth, h = innerHeight - barH;
+  for (const s of list) if (s.mode !== 'eraser') { const pad = s.size * .8 + 1; for (const p of s.pts) { w = Math.max(w, p[0] + pad); h = Math.max(h, p[1] + pad); } }
+  w = Math.max(1, Math.ceil(w)); h = Math.max(1, Math.ceil(h));
+  const k = Math.min(dpr, Math.sqrt(16e6 / (w * h)), 16384 / Math.max(w, h)); // stays within the canvas size browsers allow
+  const make = () => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k)); return c; };
+  const free = c => { c.width = c.height = 0; };
+  // the strokes are replayed on their own layer first, so the eraser cuts ink and not the white background
+  const ink = make(), ic = ink.getContext('2d');
+  if (!ic) { free(ink); throw new Error('canvas'); }
+  ic.setTransform(k, 0, 0, k, 0, 0); list.forEach(s => drawStroke(s, 0, ic));
+  const out = make(), o = out.getContext('2d');
+  if (!o) { free(ink); free(out); throw new Error('canvas'); }
+  o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height); o.drawImage(ink, 0, 0);
+  free(ink);
+  return out;
+}
+// a PNG data: URL of the picture; a browser that cannot encode it returns "data:," instead, which counts as a failure
+function pngURL(out) { const url = out.toDataURL('image/png'); if (!/^data:image\/png/.test(url)) throw new Error('toDataURL'); return url; }
+// Copy: an image on the clipboard; the blob is handed over as a promise so Safari still sees the tap
+function copy() {
+  if (!drawn().length) return toast(L.empty);
+  let out;
+  try { out = picture(); } catch (e) { return toast(L.shotFail, 8000); }
+  const blocked = () => { try { showShot(pngURL(out), L.copyBlocked); } catch (e) { toast(L.shotFail, 8000); } };
+  // `out` is emptied only after the whole attempt, because the fallback still needs it after a clipboard failure
+  const free = () => { out.width = out.height = 0; };
+  if (!canCopy) { blocked(); return free(); }
+  const blob = new Promise((ok, fail) => out.toBlob(b => b ? ok(b) : fail(new Error('toBlob')), 'image/png'));
+  const write = data => navigator.clipboard.write([new ClipboardItem({'image/png': data})]);
+  let p;
+  try { p = write(blob); } catch (e) { p = Promise.reject(e); }
+  // browsers that want a ready blob instead of a promise get a second try; a refusal by permission does not
+  p.catch(e => { if (e && e.name === 'NotAllowedError') throw e; return blob.then(write); })
+    .then(() => toast(L.copied, 6000), blocked).finally(free);
+}
+$('copy').onclick = copy;
+// Save picture: a PNG download named with local time. Inside a frame (an artifact) the picture is only shown:
+// app WebViews may ignore `download` and open the PNG in the frame instead, which would replace the board and its drawing.
+// Elsewhere, when the download is blocked or may not show (phone), the picture is shown too.
+$('save').onclick = () => {
+  if (!drawn().length) return toast(L.empty);
+  let url;
+  try { const out = picture(); try { url = pngURL(out); } finally { out.width = out.height = 0; } } catch (e) { return toast(L.shotFail, 8000); }
+  const d = new Date();
+  const f = 'drawing_' + new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+  if (embedded) return showShot(url, L.saveEmbedded);
+  try {
+    const a = document.createElement('a');
+    a.download = f; a.href = url; document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { return showShot(url, L.saveBlocked); }
+  if (touch) showShot(url, L.saveCheck.replace('{f}', f)); else toast(L.saved.replace('{f}', f), 6000);
+};
+
+// full screen: a bigger board; hidden where the browser has none (iPhone), inside a frame, or once a request fails
+const root = document.documentElement, fsRequest = root.requestFullscreen || root.webkitRequestFullscreen;
+const fsEnabled = 'fullscreenEnabled' in document ? document.fullscreenEnabled : 'webkitFullscreenEnabled' in document ? document.webkitFullscreenEnabled : true;
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+function noFull() { $('full').hidden = true; resize(); }
+if (embedded || !fsRequest || !fsEnabled) $('full').hidden = true;
+function toggleFull() {
+  if ($('full').hidden) return;
+  if (fsElement()) { const exit = document.exitFullscreen || document.webkitExitFullscreen, r = exit && exit.call(document); if (r && r.catch) r.catch(() => {}); return; }
+  try { const r = fsRequest.call(root); if (r && r.catch) r.catch(() => { noFull(); toast(L.fsFail); }); } catch (e) { noFull(); toast(L.fsFail); }
+}
+$('full').onclick = toggleFull;
+// older Safari (webkitRequestFullscreen) returns no promise and reports a refusal only with this event
+['fullscreenerror', 'webkitfullscreenerror'].forEach(t => document.addEventListener(t, () => { noFull(); toast(L.fsFail); }));
+// the button's words, accessible name and tooltip all follow the state, so it says "Exit full screen" while it exits
+['fullscreenchange', 'webkitfullscreenchange'].forEach(t => document.addEventListener(t, () => {
+  const b = $('full'), on = !!fsElement();
+  b.querySelector('.tx').textContent = on ? L.exitFull : L.full; b.setAttribute('aria-label', on ? L.exitFull : L.full); b.title = on ? L.exitFull + ' (F)' : L.tFull;
+  resize();
+}));
+
 addEventListener('keydown', e => {
   const k = (e.key || '').toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); $('undo').click(); }
-  else if (e.ctrlKey || e.altKey || e.metaKey) return; // leave browser shortcuts such as Ctrl+F alone
-  else if (k === 'p') setMode('pen'); else if (k === 'e') setMode('eraser'); else if (k === 'g') $('grid').click(); else if (k === 'f') $('full').click();
+  if (!$('shot').hidden) { if (k === 'escape') closeShot(); return; }
+  if (e.ctrlKey || e.metaKey) {
+    // Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y redo; other browser shortcuts such as Ctrl+F are left alone
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
+    return;
+  }
+  if (e.altKey) return;
+  if (k === 'p') setMode('pen'); else if (k === 'e') setMode('eraser'); else if (k === 'g') $('grid').click(); else if (k === 'f') toggleFull(); else if (k === 'c') copy();
+  else if (/^[123]$/.test(k)) document.querySelectorAll('.sz')[k - 1].click(); // 1 thin, 2 medium, 3 thick
 });
 addEventListener('resize', resize);
 resize();
+// first load: on a narrow screen the hint is not in the toolbar, so it shows once here; elsewhere a tip for trackpads
+if (compact()) toast(hint, 7000); else if (!touch) toast(L.trackpad, 7000);
 </script>
 </body>
 </html>
