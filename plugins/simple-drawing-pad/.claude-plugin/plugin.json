@@ -1,7 +1,7 @@
 {
   "name": "simple-drawing-pad",
   "displayName": "Simple Drawing Pad",
-  "version": "0.9.6",
+  "version": "0.9.8",
   "description": "Like dictation, but drawn - a quick sketch takes your idea to Claude or any app. Ctrl+Alt+D = draw · Enter = copy · Ctrl+V = paste · Shift+Enter = save as. Nothing is collected and nothing goes to third parties. A small helper is built from the included source and asks once before installing. A short local check runs at each session start. Remove: /simple-drawing-pad:uninstall.",
   "author": {
     "name": "szymjs"

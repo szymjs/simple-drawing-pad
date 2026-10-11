@@ -11,8 +11,7 @@
 # Claude app, whose sandbox keeps new folders under AppData and registry entries to itself; Explorer shows it and
 # OneDrive does not sync it. A program still in the old folder (0.5.1 to 0.7.9) is reported as an update to install.
 # The report reads the real registry through WMI (StdRegProv) for the Windows Settings > Apps line, so it says what
-# Windows shows and not what this process sees, and it names the Store version of the Claude app when it runs inside
-# it (found by walking the parent processes). Both lines are informational; neither changes the state.
+# Windows shows and not what this process sees. The line is informational; it does not change the state.
 # The plugin comes with the user's Claude account; the program is installed separately on each Windows computer.
 param([switch]$SessionStart)
 $ErrorActionPreference = 'Stop'
@@ -206,19 +205,6 @@ try {
         $r = Invoke-CimMethod -Namespace root/default -ClassName StdRegProv -MethodName GetStringValue -Arguments @{ hDefKey = [uint32]2147483649; sSubKeyName = $entry; sValueName = 'DisplayName' }
         $listed = [bool]($r -and $r.ReturnValue -eq 0 -and $r.sValue)
     } catch { }
-    # the Store version of the Claude app (an MSIX package) is recognized by its path, ...\WindowsApps\Claude_... on any
-    # drive, by walking up the parent processes of this one; at most 12 levels, and any error means "not found"
-    $storeApp = $false
-    try {
-        $id = [int]$PID
-        for ($i = 0; $i -lt 12 -and $id -gt 0; $i++) {
-            $p = Get-CimInstance Win32_Process -Filter "ProcessId=$id"
-            if (-not $p) { break }
-            if ("$($p.ExecutablePath)" -match '\\WindowsApps\\Claude_') { $storeApp = $true; break }
-            if ([int]$p.ParentProcessId -eq $id) { break }
-            $id = [int]$p.ParentProcessId
-        }
-    } catch { }
 
     'Simple Drawing Pad on this computer'
     'Program:   ' + $(if ($installed) { "installed ($exe)" } elseif ($legacy) { "installed by an earlier plugin version ($oldExe); not yet replaced by one in $dir" } else { 'not installed' })
@@ -229,7 +215,6 @@ try {
                     $(if ($oldRun) { '; legacy registry entry present (removed by /simple-drawing-pad:install)' })
     'Drawings:  ' + $drawings + ' (this computer only; keeps only the last drawing, latest.png, until the next one)'
     if ($installed -or $legacy) { 'Removal:   /simple-drawing-pad:uninstall ' + $(if ($listed) { '(also listed in Windows Settings > Apps)' } else { '(not listed in Windows Settings > Apps on this computer)' }) }
-    if ($storeApp) { 'Claude app: Microsoft Store version (its sandbox keeps registry entries and new AppData folders to itself)' }
     if ($outdated) { 'Update:    this plugin version comes with an updated helper program' }
     elseif ($legacy) { "Update:    this plugin version installs the program in $root and removes the old one" }
     if ($ahead) { "Version:   the installed program is newer ($ahead); nothing to do" }

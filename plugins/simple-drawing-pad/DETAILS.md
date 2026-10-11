@@ -57,6 +57,8 @@ Run the skill `simple-drawing-pad:draw`. Arguments: $ARGUMENTS
 
 0.7.9 is the version in the Claude directory. The versions after it, newest first.
 
+- **0.9.8: a Store package.** The helper started without arguments is now the notification-area helper, as `--tray` always was; `--board` opens the drawing window at once. This lets the Microsoft Store package and its startup task start it without arguments. The Store package is built from the same source by `store/build-msix.ps1`; Microsoft signs it, which also satisfies Smart App Control. The README, the install command and the draw skill say what to do when Windows blocks an unsigned helper: use the browser board.
+- **0.9.7: a smaller trust surface.** The check no longer walks up the parent processes to name the Store version of the Claude app; it only reads whether Windows lists the program in Settings > Apps. The Settings > Apps entry no longer starts a hidden PowerShell window. Two sentences are more exact: `-ExecutionPolicy Bypass` applies to the whole command it is given to, and closing the pen window also copies the drawing, as Enter does. The helper program is unchanged, so no update notice.
 - **0.9.6: less.** This release removes, so that a person can read the plugin's files in minutes and nothing happens without their knowledge. Gone are:
   - The drawing history. The helper keeps one file, `drawings\latest.png`, overwritten each time: no time-stamped files, no `cancelled\` folder (Esc writes only `status.txt`), no `latest.txt`. The copy you save with Shift+Enter is the only way to keep a drawing.
   - The AltGr warning in the shortcut dialog. The helper calls no keyboard-layout API; if the shortcut collides with a letter on your keyboard layout, change it from the tray menu.

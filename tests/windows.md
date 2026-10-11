@@ -1,4 +1,4 @@
-# Trying 0.9.6 on Windows
+# Trying 0.9.8 on Windows
 
 What `tests/run.sh` cannot check: the Save as dialog, the Shift+Enter key, the Windows clipboard, the tablet, the
 tray helper and its shortcut dialog.

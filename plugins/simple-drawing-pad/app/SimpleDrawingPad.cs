@@ -5,7 +5,8 @@
 // asks where to save an extra copy (a Save as dialog), then does the same and writes that copy last.
 // It works only on this computer: no network access, nothing is sent or collected.
 //
-// Usage:  SimpleDrawingPad.exe          open the board now, exit after closing it
+// Usage:  SimpleDrawingPad.exe --board  open the board now, exit after closing it
+//         SimpleDrawingPad.exe          the same as --tray (the Store app and its startup task start it without arguments)
 //         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
 //                                       the tray menu, kept in %USERPROFILE%\simple-drawing-pad\shortcut.txt) opens the board.
 //                                       When that file does not exist, the setting of 0.7.9 and earlier is read once from
@@ -904,8 +905,8 @@ namespace SimpleDrawingPadApp
         {
             try { Native.SetProcessDpiAwareness(2); } catch (Exception) { try { Native.SetProcessDPIAware(); } catch (Exception) { } }
             Application.EnableVisualStyles();
-            if (args.Length > 0 && args[0] == "--tray") RunTray();
-            else Application.Run(new BoardForm());
+            if (args.Length > 0 && args[0] == "--board") Application.Run(new BoardForm());
+            else RunTray();
         }
 
         // one tray helper per user session: a second --tray start (another plugin copy, a double start) exits quietly

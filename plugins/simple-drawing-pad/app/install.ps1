@@ -148,7 +148,7 @@ if ($keep) {
             InstallLocation = $dir
             InstallDate     = (Get-Date).ToString('yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture)
             URLInfoAbout    = 'https://github.com/szymjs/simple-drawing-pad'
-            UninstallString = '"{0}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{1}" -Settings' -f $ps, $uninstaller
+            UninstallString = '"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" -Settings' -f $ps, $uninstaller
         }
         foreach ($k in $values.Keys) { if ($values[$k]) { New-ItemProperty -LiteralPath $entry -Name $k -Value $values[$k] -PropertyType String -Force | Out-Null } }
         $kb = [int][Math]::Ceiling(((Get-Item -LiteralPath $exe).Length + (Get-Item -LiteralPath $uninstaller).Length) / 1KB)
