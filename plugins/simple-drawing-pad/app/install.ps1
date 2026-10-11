@@ -7,18 +7,15 @@
 #                              helper is started all the same
 #   .\install.ps1 -Uninstall   stop the helper and remove what this script installed (drawings are kept): runs uninstall.ps1
 # Everything is in one folder directly under the user profile, %USERPROFILE%\simple-drawing-pad (since 0.8.0): app\ has
-# the program, a copy of uninstall.ps1, source.sha256 and version.txt; drawings\ has the drawings; the folder itself has
-# helper.txt, notice.txt, no-reminder.txt and shortcut.txt. A folder directly under the user profile is the same folder
-# for every program that runs as the user, including the Store version of the Claude app, whose sandbox keeps new
-# folders under AppData (and registry writes) to itself; Explorer shows it and OneDrive does not sync it.
+# the program, a copy of uninstall.ps1, source.sha256 and version.txt; drawings\ has the last drawing (latest.png) and
+# status.txt; the folder itself has helper.txt, notice.txt, no-reminder.txt and shortcut.txt. A folder directly under the
+# user profile is the same folder for every program that runs as the user, including the Store version of the Claude
+# app, whose sandbox keeps new folders under AppData (and registry writes) to itself; Explorer shows it and OneDrive does
+# not sync it.
 # An install of 0.5.1-0.7.9 (program in %LOCALAPPDATA%\Programs\simple-drawing-pad, data in %LOCALAPPDATA%\simple-drawing-pad,
-# shortcut setting in %APPDATA%\simple-drawing-pad) is moved there: its drawings and its setting are taken along; its
-# program files, helper.txt, notice files, Run value and emptied folders are removed. The setting file itself stays.
-# Its SimpleDrawingPad.exe and version.txt are replaced by a copy of the new program and the new version (0.9.0), so a
-# plugin copy of up to 0.7.9 that is still in another Claude app finds a newer program there and only starts it; that
-# copy ends at once while the helper runs (one helper per user). While that copy exists, the helper also writes its
-# report to %LOCALAPPDATA%\simple-drawing-pad\helper.txt, where such a plugin copy looks for it, so it sees the helper
-# running. uninstall.ps1 removes both with the rest.
+# shortcut setting in %APPDATA%\simple-drawing-pad) is cleared away, so that one helper runs: its helper is stopped; its
+# program files, helper.txt, notice files, Run value and emptied folders are removed; its shortcut setting is copied when
+# there is none here yet (the old file stays). Its drawings are left where they are.
 # The program is also listed in Windows Settings > Apps, for this user only; its Uninstall button runs the copy of
 # uninstall.ps1 next to the program. Windows shows that entry when this script ran outside the Store app's sandbox
 # (claude in a terminal, the EXE desktop app) and not otherwise; /simple-drawing-pad:uninstall works either way.
@@ -42,23 +39,20 @@ $startup = if ($startupDir) { Join-Path $startupDir 'Simple Drawing Pad.lnk' }  
 $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'               # up to 0.7.9 -Autostart wrote the value simple-drawing-pad here; now only removed
 $uninstaller = Join-Path $dir 'uninstall.ps1'                               # run by the Settings > Apps entry
 $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\simple-drawing-pad'   # the Settings > Apps entry (0.6.2+; status.ps1)
-# where 0.5.1-0.7.9 kept the program, its data and the shortcut setting (hotkey.txt before 0.7.3); moved to $root below
+# where 0.5.1-0.7.9 kept the program, its data and the shortcut setting (hotkey.txt before 0.7.3); cleared away below, the drawings excepted
 $oldDir = Join-Path $env:LOCALAPPDATA 'Programs\simple-drawing-pad'
 $oldExe = Join-Path $oldDir 'SimpleDrawingPad.exe'
 $oldData = Join-Path $env:LOCALAPPDATA 'simple-drawing-pad'
 $oldSettings = Join-Path $env:APPDATA 'simple-drawing-pad'
-# previous name of this program (up to 0.3.0). Only its running helper and its Run value are touched, and only when
-# they point to exactly this file; its files, drawings and shortcut setting are left in place.
-$legacyExe = Join-Path $env:LOCALAPPDATA 'Programs\drawing-board\DrawingBoard.exe'
 
-# stops only our helper (installed copy, the copy of up to 0.7.9, bin\ copy or the previous version's copy); other users' processes have no ExecutablePath and are skipped.
+# stops only our helper (installed copy, the copy of up to 0.7.9 or bin\ copy); other users' processes have no ExecutablePath and are skipped.
 # A copy of up to 0.7.9 installed from inside the Store app's sandbox runs from the sandbox's private copy of its folder
 # (...\Packages\Claude_...\LocalCache\Local\Programs\simple-drawing-pad\), so that folder name is matched by its ending too
 function Stop-Helper {
-    $ours = @(Get-CimInstance Win32_Process -Filter "Name='SimpleDrawingPad.exe' OR Name='DrawingBoard.exe'" |
-        Where-Object { $_.ExecutablePath -eq $exe -or $_.ExecutablePath -eq $oldExe -or $_.ExecutablePath -eq $bin -or $_.ExecutablePath -eq $legacyExe -or $_.ExecutablePath -like '*\Programs\simple-drawing-pad\SimpleDrawingPad.exe' } |
+    $ours = @(Get-CimInstance Win32_Process -Filter "Name='SimpleDrawingPad.exe'" |
+        Where-Object { $_.ExecutablePath -eq $exe -or $_.ExecutablePath -eq $oldExe -or $_.ExecutablePath -eq $bin -or $_.ExecutablePath -like '*\Programs\simple-drawing-pad\SimpleDrawingPad.exe' } |
         ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
-    if ($ours | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.MainWindowTitle -like 'Simple Drawing Pad*' -or $_.MainWindowTitle -eq 'drawing-board') }) {
+    if ($ours | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like 'Simple Drawing Pad*' }) {
         throw 'Close the open Simple Drawing Pad window first (the drawing window: Enter or Esc).'
     }
     foreach ($p in $ours) {
@@ -79,17 +73,6 @@ function Remove-OldAutostart {
     return $true
 }
 
-# removes the previous version's Run value only if the program it starts is exactly $legacyExe; $true if removed
-function Remove-LegacyAutostart {
-    $v = Get-ItemProperty -LiteralPath $run -Name 'drawing-board' -ErrorAction SilentlyContinue
-    if (-not $v) { return $false }
-    $cmd = ([string]$v.'drawing-board').Trim()
-    $path = if ($cmd.StartsWith('"')) { $cmd.Substring(1).Split('"')[0] } else { $cmd.Split(' ')[0] }
-    if ($path -ne $legacyExe) { return $false }
-    Remove-ItemProperty -LiteralPath $run -Name 'drawing-board'
-    return $true
-}
-
 # a shortcut name read from a file reaches the user and Claude only if it looks like one (Ctrl+Alt+D, Ctrl+Shift+F12)
 function Test-Shortcut([string]$s) { $s.Length -le 40 -and $s -match '^((ctrl|control|alt|shift)\s*\+\s*){1,3}[a-z0-9]{1,20}$' }
 
@@ -100,18 +83,6 @@ function Get-SourceHash([string[]]$paths) {
     try { -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
 }
 
-# takes the drawings (drawing_*.png) of a folder of up to 0.7.9 along, one by one; a drawing that already exists at the new
-# place is not overwritten and stays where it was. latest.png, latest.txt and status.txt name paths in the old folder,
-# so they are not taken along: the helper writes new ones at the next drawing, and the migration below removes the old ones
-function Move-OldFiles([string]$from, [string]$to) {
-    if (-not (Test-Path -LiteralPath $from)) { return }
-    New-Item -ItemType Directory -Force $to | Out-Null
-    foreach ($f in @(Get-ChildItem -LiteralPath $from -File -Force -Filter 'drawing_*.png')) {
-        $target = Join-Path $to $f.Name
-        if (-not (Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $f.FullName -Destination $target }
-    }
-}
-
 if ($Uninstall) {
     & (Join-Path $here 'uninstall.ps1')   # the same steps as the Uninstall button in Settings > Apps
     return
@@ -119,15 +90,14 @@ if ($Uninstall) {
 
 # an older copy of the plugin (for example in another Claude app that has not updated yet) must not put its older
 # program over a newer one: then the installed program is kept and only started. The installed version is read next
-# to the program, or from the folder of up to 0.7.9 while the program is still there
+# to the program
 $version = ''
 try { $version = [string](Get-Content -Raw -LiteralPath (Join-Path $here '..\.claude-plugin\plugin.json') | ConvertFrom-Json).version } catch { }
-$installedVersion = ''
-foreach ($f in $versionFile, (Join-Path $oldDir 'version.txt')) { if (-not $installedVersion -and (Test-Path -LiteralPath $f)) { $installedVersion = [IO.File]::ReadAllText($f).Trim() } }
+$installedVersion = if (Test-Path -LiteralPath $versionFile) { [IO.File]::ReadAllText($versionFile).Trim() } else { '' }
 $a = $null; $b = $null
 $keep = (Test-Path -LiteralPath $exe) -and [version]::TryParse($version, [ref]$a) -and [version]::TryParse($installedVersion, [ref]$b) -and $b -gt $a
 
-Stop-Helper   # before the build, so a helper started from bin\ cannot lock the build output; also the helper of up to 0.7.9, whose files move below
+Stop-Helper   # before the build, so a helper started from bin\ cannot lock the build output; also the helper of up to 0.7.9, whose files are removed below
 if ($keep) {
     "The installed program ($b) is newer than this copy of the plugin ($a), so it is kept and only started."
 } else {
@@ -140,41 +110,28 @@ if ($keep) {
         Copy-Item -LiteralPath (Join-Path $here 'uninstall.ps1') -Destination $uninstaller -Force
         [IO.File]::WriteAllText($hashFile, (Get-SourceHash @((Join-Path $here 'SimpleDrawingPad.cs'), (Join-Path $here 'build.ps1'), (Join-Path $here 'uninstall.ps1'))))   # one line: 0.5.0 compares the whole file
         if ($version) { [IO.File]::WriteAllText($versionFile, $version) } elseif (Test-Path -LiteralPath $versionFile) { Remove-Item -LiteralPath $versionFile }
-        # an install of up to 0.7.9 moves here: its drawings file by file, its shortcut setting once (when there is none here
-        # yet); then its program files, the report of the helper stopped above, its notice files (this install asks afresh)
-        # and the emptied folders go. The new program works without this step, so a problem here is only reported
+        # an install of up to 0.7.9 is cleared away: its shortcut setting is copied once (when there is none here yet); then
+        # its program files, the report of the helper stopped above, its notice files (this install asks afresh) and the
+        # emptied folders go. Its drawings stay where they are. The new program works without this step, so a problem here
+        # is only reported
         try {
-            Move-OldFiles (Join-Path $oldData 'drawings\cancelled') (Join-Path $drawings 'cancelled')
-            Move-OldFiles (Join-Path $oldData 'drawings') $drawings
             if (-not (Test-Path -LiteralPath $settingFile)) {
                 foreach ($f in (Join-Path $oldSettings 'shortcut.txt'), (Join-Path $oldSettings 'hotkey.txt')) {
                     if (Test-Path -LiteralPath $f) { Copy-Item -LiteralPath $f -Destination $settingFile -Force; break }
                 }
             }
-            foreach ($f in (Join-Path $oldDir 'uninstall.ps1'), (Join-Path $oldDir 'source.sha256'),
-                           (Join-Path $oldData 'helper.txt'), (Join-Path $oldData 'notice.txt'), (Join-Path $oldData 'no-reminder.txt'),
-                           (Join-Path $oldData 'drawings\latest.png'), (Join-Path $oldData 'drawings\latest.txt'), (Join-Path $oldData 'drawings\status.txt')) {
+            foreach ($f in $oldExe, (Join-Path $oldDir 'uninstall.ps1'), (Join-Path $oldDir 'source.sha256'), (Join-Path $oldDir 'version.txt'),
+                           (Join-Path $oldData 'helper.txt'), (Join-Path $oldData 'notice.txt'), (Join-Path $oldData 'no-reminder.txt')) {
                 if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f }
             }
-            # the old program is replaced by a copy of the new one, and its version.txt by the new version: a plugin copy of
-            # up to 0.7.9 (for example in another Claude app that has not updated yet) reads only this folder, finds a newer
-            # program and only starts it, and that copy ends at once while the helper runs (one helper per user); without it,
-            # that plugin copy would install itself again next to this one. Overwritten, not deleted first, so a failed copy
-            # leaves the old program in place and the next install tries again. While this copy exists, the helper also writes
-            # its report to $oldData\helper.txt, so that plugin copy sees it running (it does not look in app\). uninstall.ps1
-            # removes both
-            if (Test-Path -LiteralPath $oldExe) {
-                Copy-Item -LiteralPath $exe -Destination $oldExe -Force
-                if ($version) { [IO.File]::WriteAllText((Join-Path $oldDir 'version.txt'), $version) }
-            }
-            foreach ($d in $oldDir, (Join-Path $oldData 'drawings\cancelled'), (Join-Path $oldData 'drawings'), $oldData) {
+            foreach ($d in $oldDir, $oldData) {
                 if ((Test-Path -LiteralPath $d) -and -not (Get-ChildItem -LiteralPath $d -Force)) { Remove-Item -LiteralPath $d -ErrorAction SilentlyContinue }
             }
         } catch {
             # names only the folders of the previous version that are still there: after its uninstall only the data folder is
             $left = @($oldData, $oldDir | Where-Object { Test-Path -LiteralPath $_ }) -join ' and '
             if (-not $left) { $left = 'its folders' }
-            "WARNING: not everything of the previous version was moved from $left to ${root}: $($_.Exception.Message) The new program works; /simple-drawing-pad:install tries the move again."
+            "WARNING: not everything of the previous version was removed from ${left}: $($_.Exception.Message) The new program works; /simple-drawing-pad:install tries again."
         }
         # listed in Windows Settings > Apps, for this user only (no admin rights). Its Uninstall button runs the copy of
         # uninstall.ps1 next to the program, so it works even after the plugin is removed from Claude. Windows shows the
@@ -203,10 +160,9 @@ if ($keep) {
     }
 }
 # installed (again): start fresh, so a later problem gets its one session-start notice; the notice files of up to 0.7.9
-# count for status.ps1 too, so they go as well, also when the installed program is kept and the move above is skipped
+# count for status.ps1 too, so they go as well, also when the installed program is kept and the clearing of the old install above is skipped
 foreach ($f in $noticeFile, $offFile, (Join-Path $oldData 'notice.txt'), (Join-Path $oldData 'no-reminder.txt')) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
-$oldAutostart = Remove-OldAutostart         # else Windows looks for the removed program of up to 0.7.9 at every logon
-$legacyAutostart = Remove-LegacyAutostart   # else the previous version's helper starts again at logon
+$oldAutostart = Remove-OldAutostart   # else Windows looks for the removed program of up to 0.7.9 at every logon
 $autostartProblem = ''   # -Autostart: why the shortcut could not be created; the helper is started all the same
 if ($Autostart -and $startup) {
     # the standard per-user autostart: Windows runs the shortcut at logon, Task Manager lists it under Startup apps and
@@ -227,7 +183,7 @@ if ($Autostart -and $startup) {
     }
 } elseif ($Autostart) {
     'WARNING: your Startup folder is missing and could not be created, so the helper does not start with Windows.'
-} elseif ($oldAutostart -or $legacyAutostart) {
+} elseif ($oldAutostart) {
     'The previous version started at logon; its autostart entry was removed. Run this again with -Autostart to start the helper at every logon.'
 }
 # started in its own folder, not in the folder this script runs from (for example a project folder)
@@ -251,5 +207,5 @@ if ($report -and $report[0].Trim() -eq 'taken') {
 } else {
     "Press $hk to draw (change it from the tray icon menu). Enter copies to the clipboard, Ctrl+V pastes, Esc cancels."
 }
-"Drawings stay on this computer in $drawings (the last 10 are kept). The program does not use the network."
+"Drawings stay on this computer: $drawings keeps only the last drawing, latest.png, until the next one. The program does not use the network."
 'Remove it with /simple-drawing-pad:uninstall; the entry in Windows Settings > Apps appears when Windows can see it.'

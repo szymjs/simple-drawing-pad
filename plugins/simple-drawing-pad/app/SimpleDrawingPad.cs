@@ -16,16 +16,16 @@
 //         directly under the user profile is the same folder for every program that runs as the user, including the
 //         Store version of the Claude app, whose sandbox keeps new folders under AppData to itself; Explorer shows
 //         it, and OneDrive does not sync it. Up to 0.7.9 the files were under %LOCALAPPDATA% and %APPDATA%.
-// Output: %USERPROFILE%\simple-drawing-pad\drawings\drawing_yyyyMMdd_HHmmss.png (+ latest.png, latest.txt);
-//         Esc: ...\drawings\cancelled\. A drawing is a quick note for Claude, not an archive: the folder stays on this
-//         computer (never in Pictures, which OneDrive may sync to other computers) and keeps the last 10 drawings.
-//         Every close writes ...\drawings\status.txt (UTF-8): copied | cancelled | empty, PNG path, local time.
-//         Shift+Enter also writes a copy where the user chooses; that copy is theirs: not pruned, not named in status.txt.
-//         It is written last, after status.txt; if it fails, a warning names its path and the drawing is still sent.
+// Output: %USERPROFILE%\simple-drawing-pad\drawings\latest.png, overwritten at every Enter / close: one file, no history.
+//         A drawing is a quick note for Claude, not an archive: the folder stays on this computer (never in Pictures,
+//         which OneDrive may sync to other computers). Esc writes no picture and leaves latest.png as it was.
+//         Every close writes ...\drawings\status.txt (UTF-8): copied | cancelled | empty, the latest.png path (copied
+//         only, else empty), local time.
+//         Shift+Enter also writes a copy where the user chooses; that copy is theirs, not named in status.txt, and the
+//         only way to keep a drawing. It is written last, after status.txt; if it fails, a warning names its path and
+//         the drawing is still sent.
 // Helper: --tray writes %USERPROFILE%\simple-drawing-pad\helper.txt whenever it registers its shortcut:
-//         ok | taken, shortcut, process id, local time. status.ps1 reads it. While install.ps1's stub
-//         %LOCALAPPDATA%\Programs\simple-drawing-pad\SimpleDrawingPad.exe exists (0.9.0), the same report is also written
-//         to %LOCALAPPDATA%\simple-drawing-pad\helper.txt, the only report a plugin copy of up to 0.7.9 reads.
+//         ok | taken, shortcut, process id, local time. status.ps1 reads it.
 // Build:  build.ps1 (uses the C# compiler that ships with Windows / .NET Framework 4)
 using System;
 using System.Collections.Generic;
@@ -64,9 +64,8 @@ namespace SimpleDrawingPadApp
         [StructLayout(LayoutKind.Sequential)]
         public struct AXIS { public int axMin, axMax; public uint axUnits; public int axResolution; }
 
-        // field order follows the PK_* bit order
-        [StructLayout(LayoutKind.Sequential)]
         // field order follows the PK_* bit order: status, time, cursor, buttons, x, y, pressure
+        [StructLayout(LayoutKind.Sequential)]
         public struct PACKET { public uint pkStatus, pkTime, pkCursor, pkButtons; public int pkX, pkY; public uint pkNormalPressure; }
 
         [DllImport("Wintab32.dll", CharSet = CharSet.Unicode)] public static extern uint WTInfoW(uint cat, uint idx, ref LOGCONTEXT ctx);
@@ -89,11 +88,6 @@ namespace SimpleDrawingPadApp
         [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
         [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
-        // for the AltGr check in the shortcut dialog: what a key types on the current keyboard layout
-        [DllImport("user32.dll")] public static extern IntPtr GetKeyboardLayout(uint threadId);
-        [DllImport("user32.dll")] public static extern uint MapVirtualKeyEx(uint code, uint mapType, IntPtr hkl);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        public static extern int ToUnicodeEx(uint vk, uint scanCode, byte[] keyState, [Out] System.Text.StringBuilder buffer, int size, uint flags, IntPtr hkl);
         public const int WM_HOTKEY = 0x0312;
         public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4;
     }
@@ -145,7 +139,7 @@ namespace SimpleDrawingPadApp
     // shortcut.txt; install.ps1 keeps the program in app\). A folder there is the same folder for every program that runs
     // as the user, including the Store version of the Claude app, whose sandbox keeps new folders under AppData to
     // itself; Explorer shows it, and OneDrive does not sync it. Up to 0.7.9 the drawings and helper.txt were under
-    // %LOCALAPPDATA% and shortcut.txt under %APPDATA%; install.ps1 moves them.
+    // %LOCALAPPDATA% and shortcut.txt under %APPDATA%; install.ps1 copies the shortcut setting and leaves the drawings there.
     static class DataFolder
     {
         public static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "simple-drawing-pad");
@@ -208,7 +202,7 @@ namespace SimpleDrawingPadApp
         public BoardForm()
         {
             // the title says how to use it: open, copy, paste (install.ps1 matches titles starting "Simple Drawing Pad")
-            Text = "Simple Drawing Pad  —  " + (ShortcutName != null ? string.Format("{0} opens", ShortcutName) + "  ·  " : "")
+            Text = "Simple Drawing Pad  ·  " + (ShortcutName != null ? string.Format("{0} opens", ShortcutName) + "  ·  " : "")
                  + "Enter copies to clipboard  ·  Ctrl+V pastes in a chat or any app";
             KeyPreview = true;
             DoubleBuffered = true;
@@ -599,7 +593,7 @@ namespace SimpleDrawingPadApp
             if (saveAsFailed != null)
             {
                 string sent = Copied ? "The drawing was copied to the clipboard as usual" : "The drawing was saved, but another program was using the clipboard, so it was not copied";
-                MessageBox.Show(this, string.Format("{0}. The extra copy could not be saved here:\n{1}\n\n{2}\n\nThe drawing is kept as:\n{3}",
+                MessageBox.Show(this, string.Format("{0}. The extra copy could not be saved here:\n{1}\n\n{2}\n\nThe drawing is in:\n{3}\n(the next drawing overwrites it)",
                     sent, saveAsFailed, saveAsFailReason, SavedPath), "Simple Drawing Pad", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 saveAsFailed = null; saveAsFailReason = null;
             }
@@ -616,28 +610,12 @@ namespace SimpleDrawingPadApp
         {
             return Path.Combine(DataFolder.Root, "drawings");
         }
-        // keeps the newest Keep drawings in a folder; the names sort by time (drawing_yyyyMMdd_HHmmss.png, Gregorian).
-        // The drawing just saved is never deleted, even if its name sorts first (the clock was set back).
-        // Never fails the save: a file that cannot be deleted now is left for the next time.
-        const int Keep = 10;
-        static void Prune(string folder, string justSaved)
-        {
-            try
-            {
-                string[] files = Directory.GetFiles(folder, "drawing_*.png");
-                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
-                for (int i = 0; i < files.Length - Keep; i++)
-                    if (!string.Equals(files[i], justSaved, StringComparison.OrdinalIgnoreCase))
-                        try { File.Delete(files[i]); } catch (Exception) { }
-            }
-            catch (Exception) { }
-        }
-        // Enter / close: PNG + latest.png + latest.txt + clipboard. Esc: PNG in cancelled\ only (latest.* untouched),
-        // so a stray Esc never loses a drawing. Every close writes status.txt (copied | cancelled | empty, PNG path, local
-        // time) for Claude to wait on. Shift+Enter: the user's own copy comes last, after status.txt, in its own try: when
-        // it fails (a full disk, a folder protected by Controlled Folder Access) the drawing has already been saved and
-        // sent, so Save() does not throw; saveAsFailed and saveAsFailReason are set for the warning in OnFormClosing, and
-        // the board closes, so the same sheet is never saved twice under a new name.
+        // Enter / close: latest.png (overwritten; the one file kept) + clipboard. Esc: no picture, latest.png untouched.
+        // Every close writes status.txt (copied | cancelled | empty, the latest.png path or empty, local time) for Claude
+        // to wait on. Shift+Enter: the user's own copy comes last, after status.txt, in its own try: when it fails (a full
+        // disk, a folder protected by Controlled Folder Access) the drawing has already been saved and sent, so Save()
+        // does not throw; saveAsFailed and saveAsFailReason are set for the warning in OnFormClosing, and the board
+        // closes, so the same sheet is never saved twice.
         // Throws when saving the drawing itself fails.
         string saveAsFailed, saveAsFailReason;
         void Save()
@@ -645,19 +623,10 @@ namespace SimpleDrawingPadApp
             DateTime now = DateTime.Now;
             string dir = OutDir(), file = "", state = strokes.Count == 0 ? "empty" : cancelled ? "cancelled" : "copied";
             Directory.CreateDirectory(dir);
-            if (state != "empty")
-            {
-                string to = cancelled ? Path.Combine(dir, "cancelled") : dir;
-                Directory.CreateDirectory(to);
-                // invariant culture: a Persian or Thai regional format would otherwise write another calendar's year
-                file = Path.Combine(to, "drawing_" + now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".png");
-                sheet.Save(file, ImageFormat.Png);
-                Prune(to, file);
-            }
             if (state == "copied")
             {
-                try { File.Copy(file, Path.Combine(dir, "latest.png"), true); } catch (Exception) { }   // a convenience copy; latest.txt names the real file
-                File.WriteAllText(Path.Combine(dir, "latest.txt"), file + Environment.NewLine + now.ToString("o") + Environment.NewLine);
+                file = Path.Combine(dir, "latest.png");
+                sheet.Save(file, ImageFormat.Png);
                 try { Clipboard.SetImage(sheet); Copied = true; } catch (ExternalException) { }   // Windows retries for about a second
                 SavedPath = file;
             }
@@ -691,10 +660,6 @@ namespace SimpleDrawingPadApp
         static readonly string LegacyConfigFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "simple-drawing-pad", "shortcut.txt");
         // whether the shortcut works, for status.ps1 (Claude cannot see the balloon tip): ok | taken, shortcut, process id, local time
         static readonly string StateFile = Path.Combine(DataFolder.Root, "helper.txt");
-        // the stub that install.ps1 leaves in the program folder of up to 0.7.9 (0.9.0), and the report a plugin copy of up
-        // to 0.7.9 reads (it finds the helper only by that file or by the stub's path, and this helper runs from app\)
-        static readonly string LegacyStub = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "simple-drawing-pad", "SimpleDrawingPad.exe");
-        static readonly string LegacyStateFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "simple-drawing-pad", "helper.txt");
         static readonly string Pid = System.Diagnostics.Process.GetCurrentProcess().Id.ToString();
         const Keys DefaultShortcut = Keys.Control | Keys.Alt | Keys.D;
         // copy, paste and other editing keys stay with the apps: Ctrl+V must paste the drawing, not open the board
@@ -744,10 +709,7 @@ namespace SimpleDrawingPadApp
             return ok;
         }
 
-        // a failed write only means status.ps1 cannot tell whether the shortcut works; the helper keeps running.
-        // While the stub exists, the same report also goes to the place of up to 0.7.9, so a plugin copy of that age sees
-        // the helper running instead of offering an install whose start ends at once; that write comes after the main
-        // one, in its own try, and only while the stub is there (no folder is created under %LOCALAPPDATA% otherwise)
+        // a failed write only means status.ps1 cannot tell whether the shortcut works; the helper keeps running
         static void WriteState(bool ok, string name)
         {
             string text = (ok ? "ok" : "taken") + Environment.NewLine + name + Environment.NewLine + Pid + Environment.NewLine + DateTime.Now.ToString("o") + Environment.NewLine;
@@ -757,28 +719,14 @@ namespace SimpleDrawingPadApp
                 File.WriteAllText(StateFile, text);
             }
             catch (Exception) { }
-            try
-            {
-                if (File.Exists(LegacyStub))
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(LegacyStateFile));
-                    File.WriteAllText(LegacyStateFile, text);
-                }
-            }
-            catch (Exception) { }
         }
-        // on exit the files go away, each unless another helper has written it since
+        // on exit the file goes away, unless another helper has written it since
         static void RemoveState()
         {
-            RemoveOwn(StateFile);
-            RemoveOwn(LegacyStateFile);
-        }
-        static void RemoveOwn(string file)
-        {
             try
             {
-                string[] lines = File.ReadAllLines(file);
-                if (lines.Length > 2 && lines[2] == Pid) File.Delete(file);
+                string[] lines = File.ReadAllLines(StateFile);
+                if (lines.Length > 2 && lines[2] == Pid) File.Delete(StateFile);
             }
             catch (Exception) { }
         }
@@ -904,7 +852,6 @@ namespace SimpleDrawingPadApp
     {
         public Keys Chosen;
         readonly Label shown = new Label();
-        readonly Label altGr = new Label();
         readonly Button ok = new Button();
         public ShortcutDialog(Keys current)
         {
@@ -915,19 +862,15 @@ namespace SimpleDrawingPadApp
             Text = "Simple Drawing Pad: shortcut";
             Icon = AppIcon.Large;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
-            StartPosition = FormStartPosition.CenterScreen; KeyPreview = true; ClientSize = new Size(380, 190);
+            StartPosition = FormStartPosition.CenterScreen; KeyPreview = true; ClientSize = new Size(380, 150);
             Label info = new Label(); info.Text = "Press the new key combination (Ctrl and/or Alt + a key):";
             info.AutoSize = true; info.Location = new Point(14, 14); Controls.Add(info);
             shown.Font = new Font(Font.FontFamily, 16f, FontStyle.Bold); shown.AutoSize = true; shown.Location = new Point(14, 44);
             Chosen = current; shown.Text = Shortcuts.Format(current); Controls.Add(shown);
-            // room for three lines under the shortcut: the AltGr warning, empty when there is nothing to warn about
-            altGr.AutoSize = true; altGr.MaximumSize = new Size(352, 0); altGr.Location = new Point(14, 84); altGr.ForeColor = Color.FromArgb(170, 60, 0);
-            Controls.Add(altGr);
-            ok.Text = "OK"; ok.DialogResult = DialogResult.OK; ok.Location = new Point(200, 148); ok.TabStop = false; Controls.Add(ok);
-            Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; cancel.Location = new Point(285, 148); cancel.TabStop = false; Controls.Add(cancel);
+            ok.Text = "OK"; ok.DialogResult = DialogResult.OK; ok.Location = new Point(200, 105); ok.TabStop = false; Controls.Add(ok);
+            Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; cancel.Location = new Point(285, 105); cancel.TabStop = false; Controls.Add(cancel);
             AcceptButton = ok; CancelButton = cancel;
             ResumeLayout(false);
-            altGr.Text = AltGrWarning(current);
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -937,49 +880,9 @@ namespace SimpleDrawingPadApp
             if (!isModifier && hasMod)
             {
                 Chosen = keyData & (Keys.KeyCode | Keys.Control | Keys.Alt | Keys.Shift); shown.Text = Shortcuts.Format(Chosen);
-                altGr.Text = AltGrWarning(Chosen);
                 return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
-        }
-
-        // On layouts with an AltGr key (Polish, German, French, ...), Windows sends AltGr as Ctrl+Alt, so a Ctrl+Alt
-        // shortcut takes that AltGr character (for example ś or @) away from every app. This warns and does not refuse;
-        // it checks the current keyboard layout only. "" when there is nothing to warn about.
-        static string AltGrWarning(Keys k)
-        {
-            if ((k & (Keys.Control | Keys.Alt)) != (Keys.Control | Keys.Alt)) return "";
-            string typed = Typed(k);
-            if (typed.Length == 0) return "";
-            Keys code = k & Keys.KeyCode;
-            string key = ((k & Keys.Shift) != 0 ? "Shift+" : "") + Shortcuts.Format(code);
-            string text = string.Format("On this keyboard layout AltGr+{0} types {1}. This shortcut would stop it from typing in every app. ", key, typed);
-            if ((k & Keys.Shift) == 0 && Typed(k | Keys.Shift).Length == 0)
-                return text + string.Format("Add Shift ({0}) to keep it, or choose another key.", Shortcuts.Format(k | Keys.Shift));
-            return text + "Choose another key to keep it.";
-        }
-        // the printable text a key types with these modifiers on the current keyboard layout, "" if none (or on any error)
-        static string Typed(Keys k)
-        {
-            try
-            {
-                byte[] state = new byte[256];
-                // AltGr arrives as left Ctrl + right Alt; the generic Ctrl, Alt and Shift entries are set too
-                if ((k & Keys.Control) != 0) { state[(int)Keys.ControlKey] = 0x80; state[(int)Keys.LControlKey] = 0x80; }
-                if ((k & Keys.Alt) != 0) { state[(int)Keys.Menu] = 0x80; state[(int)Keys.RMenu] = 0x80; }
-                if ((k & Keys.Shift) != 0) { state[(int)Keys.ShiftKey] = 0x80; state[(int)Keys.LShiftKey] = 0x80; }
-                IntPtr hkl = Native.GetKeyboardLayout(0);
-                uint vk = (uint)(k & Keys.KeyCode);
-                uint scan = Native.MapVirtualKeyEx(vk, 0, hkl);   // MAPVK_VK_TO_VSC
-                System.Text.StringBuilder buffer = new System.Text.StringBuilder(8);
-                // flag 4: leave the keyboard state (a pending dead key) as it is (Windows 10 1607 and later)
-                int n = Native.ToUnicodeEx(vk, scan, state, buffer, buffer.Capacity, 4, hkl);
-                if (n == 0) return "";
-                string s = n < 0 ? buffer.ToString(0, Math.Min(1, buffer.Length)) : buffer.ToString(0, Math.Min(n, buffer.Length));   // n < 0: a dead key (an accent)
-                foreach (char c in s) if (char.IsControl(c)) return "";   // Ctrl+letter control codes are not typed text
-                return s.Trim();
-            }
-            catch (Exception) { return ""; }
         }
     }
 
@@ -1005,8 +908,8 @@ namespace SimpleDrawingPadApp
             else Application.Run(new BoardForm());
         }
 
-        // one tray helper per user session: a second --tray start (another plugin copy, the old 0.7.9 place, a double
-        // start) exits quietly before it adds an icon, tries the shortcut or writes helper.txt
+        // one tray helper per user session: a second --tray start (another plugin copy, a double start) exits quietly
+        // before it adds an icon, tries the shortcut or writes helper.txt
         static void RunTray()
         {
             System.Threading.Mutex one;

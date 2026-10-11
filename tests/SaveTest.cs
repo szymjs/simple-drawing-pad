@@ -27,7 +27,22 @@ static class SaveTest
     static string GetSaveAs(Type t, object board) { return (string)t.GetField("saveAsPath", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(board); }
     // the copy's path when it could not be written (shown in the warning when the board closes), else null
     static string GetSaveAsFailed(Type t, object board) { return (string)t.GetField("saveAsFailed", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(board); }
-    static int Drawings(string drawings) { return Directory.GetFiles(drawings, "drawing_*.png").Length; }
+    // Esc: the board closes with cancelled set, so Save() writes status.txt only
+    static void SetCancelled(Type t, object board) { t.GetField("cancelled", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(board, true); }
+    // the names of the files in drawings\, sorted: after a drawing the folder holds latest.png and status.txt, nothing else
+    static string Files(string drawings)
+    {
+        string[] names = Directory.GetFiles(drawings);
+        for (int i = 0; i < names.Length; i++) names[i] = Path.GetFileName(names[i]);
+        Array.Sort(names, StringComparer.Ordinal);
+        return string.Join(" ", names);
+    }
+    static bool SameBytes(byte[] a, byte[] b)
+    {
+        if (a.Length != b.Length) return false;
+        for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+        return true;
+    }
     static Exception CallSave(Type t, object board)
     {
         try { t.GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(board, null); return null; }
@@ -42,6 +57,7 @@ static class SaveTest
         string exe = Path.GetFullPath(args[0]);
         string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         string drawings = Path.Combine(home, "simple-drawing-pad", "drawings");
+        string latest = Path.Combine(drawings, "latest.png");
         if (Directory.Exists(drawings)) Directory.Delete(drawings, true);
         Console.WriteLine("program: " + exe);
         Console.WriteLine("home:    " + home);
@@ -56,28 +72,29 @@ static class SaveTest
         Console.WriteLine("  Save() threw: " + (e1 == null ? "nothing" : e1.GetType().Name + ": " + e1.Message));
         string[] st = Status(drawings);
         Check(st[0] == "copied", "status.txt line 1 is 'copied' (got '" + st[0] + "')");
-        Check(st[1].StartsWith(drawings) && st[1].EndsWith(".png"), "status.txt line 2 is the drawings\\ PNG, not the copy (got '" + st[1] + "')");
-        Check(IsPng(st[1]), "the drawings\\ PNG exists and is a PNG");
+        Check(st[1] == latest, "status.txt line 2 is drawings\\latest.png, not the copy (got '" + st[1] + "')");
+        Check(IsPng(latest), "latest.png exists and is a PNG");
         Check(IsPng(copy), "the Save as copy exists and is a PNG: " + copy);
-        Check(new FileInfo(copy).Length == new FileInfo(st[1]).Length, "the copy has the same size as the drawings\\ PNG");
-        Check(File.ReadAllText(Path.Combine(drawings, "latest.txt")).StartsWith(st[1]), "latest.txt names the drawings\\ PNG");
-        Check(IsPng(Path.Combine(drawings, "latest.png")), "latest.png exists");
+        Check(new FileInfo(copy).Length == new FileInfo(latest).Length, "the copy has the same size as latest.png");
+        Check(Files(drawings) == "latest.png status.txt", "drawings\\ holds latest.png and status.txt only: no drawing_*.png, no latest.txt (got '" + Files(drawings) + "')");
         Check(GetSaveAs(t, b1) == null, "saveAsPath is reset to null after the save");
         Check(GetSaveAsFailed(t, b1) == null, "no copy failure is recorded");
         Check(e1 == null || e1 is System.Runtime.InteropServices.ExternalException, "no exception, or only the clipboard's ExternalException (is caught in the program)");
 
-        Console.WriteLine("\n2. Plain Enter path: a stroke, no saveAsPath, Save()");
+        Console.WriteLine("\n2. Plain Enter path: a stroke, no saveAsPath, Save(): latest.png is overwritten, nothing is added");
         int before = Directory.GetFiles(copyDir, "*.png").Length;
         object b2 = NewBoard(a, out t); AddStroke(a, t, b2);
         Exception e2 = CallSave(t, b2);
         st = Status(drawings);
-        Check(st[0] == "copied", "status.txt says copied");
+        Check(st[0] == "copied" && st[1] == latest, "status.txt says copied and names latest.png");
+        Check(IsPng(latest), "latest.png is a PNG");
+        Check(Files(drawings) == "latest.png status.txt", "still one drawing: drawings\\ holds latest.png and status.txt only (got '" + Files(drawings) + "')");
         Check(Directory.GetFiles(copyDir, "*.png").Length == before, "no extra copy was written");
         Check(e2 == null || e2 is System.Runtime.InteropServices.ExternalException, "no exception beyond the clipboard's");
 
         Console.WriteLine("\n3. Copy to an unwritable place: the drawing is still saved and sent, the failure is recorded, nothing is saved twice");
         // the copy is written last, in its own try: Save() does not throw, so OnFormClosing only warns (naming the path)
-        // and the board closes; there is no retry that would save the same sheet again under a new name
+        // and the board closes; there is no retry that would save the same sheet again
         Directory.Delete(drawings, true);
         string bad = "/nonexistent-dir/x/y.png";
         object b3 = NewBoard(a, out t); AddStroke(a, t, b3); SetSaveAs(t, b3, bad);
@@ -85,23 +102,32 @@ static class SaveTest
         Console.WriteLine("  Save() threw: " + (e3 == null ? "nothing" : e3.GetType().Name + ": " + e3.Message));
         Check(e3 == null || e3 is System.Runtime.InteropServices.ExternalException, "Save() did not throw (beyond the clipboard's ExternalException), so the close is not cancelled");
         st = Status(drawings);
-        Check(st[0] == "copied" && IsPng(st[1]), "status.txt says copied and names the drawings\\ PNG");
-        Check(File.ReadAllText(Path.Combine(drawings, "latest.txt")).StartsWith(st[1]), "latest.txt names the drawings\\ PNG");
-        Check(IsPng(Path.Combine(drawings, "latest.png")), "latest.png exists");
+        Check(st[0] == "copied" && st[1] == latest && IsPng(latest), "status.txt says copied and names latest.png, which is a PNG");
         Check(GetSaveAs(t, b3) == null, "saveAsPath cleared after the failed attempt");
         Check(GetSaveAsFailed(t, b3) == bad, "the failed copy's path is recorded for the warning (got '" + GetSaveAsFailed(t, b3) + "')");
-        Check(Drawings(drawings) == 1, "drawings\\ holds a single drawing (got " + Drawings(drawings) + ")");
+        Check(Files(drawings) == "latest.png status.txt", "drawings\\ holds latest.png and status.txt only (got '" + Files(drawings) + "')");
 
-        Console.WriteLine("\n4. Empty sheet with saveAsPath set: nothing is copied, status is 'empty'");
+        Console.WriteLine("\n4. Empty sheet with saveAsPath set: nothing is copied, status is 'empty', latest.png is left as it was");
+        byte[] kept = File.ReadAllBytes(latest);
         string copy4 = Path.Combine(copyDir, "should-not-exist.png");
         object b4 = NewBoard(a, out t); SetSaveAs(t, b4, copy4);
         Exception e4 = CallSave(t, b4);
         st = Status(drawings);
         Check(st[0] == "empty" && st[1] == "", "status.txt says empty with no path");
         Check(!File.Exists(copy4), "no copy written for an empty sheet");
+        Check(SameBytes(kept, File.ReadAllBytes(latest)), "latest.png is unchanged");
         Check(e4 == null, "no exception");
 
-        Console.WriteLine("\n5. Keys: Shift+Enter is routed before the plain Enter case (static check of ProcessCmdKey)");
+        Console.WriteLine("\n5. Esc: a stroke, cancelled set, Save(): status is 'cancelled' with no path, latest.png is left as it was, no file is added");
+        object b5 = NewBoard(a, out t); AddStroke(a, t, b5); SetCancelled(t, b5);
+        Exception e5 = CallSave(t, b5);
+        st = Status(drawings);
+        Check(st[0] == "cancelled" && st[1] == "", "status.txt says cancelled with no path (got '" + st[0] + "', '" + st[1] + "')");
+        Check(SameBytes(kept, File.ReadAllBytes(latest)), "latest.png is unchanged");
+        Check(Files(drawings) == "latest.png status.txt", "nothing was added to drawings\\ (got '" + Files(drawings) + "')");
+        Check(e5 == null, "no exception");
+
+        Console.WriteLine("\n6. Keys: Shift+Enter is routed before the plain Enter case (static check of ProcessCmdKey)");
         MethodInfo pck = t.GetMethod("ProcessCmdKey", BindingFlags.NonPublic | BindingFlags.Instance);
         Check(pck != null, "ProcessCmdKey exists");
         Check(t.GetMethod("SaveAs", BindingFlags.NonPublic | BindingFlags.Instance) != null, "SaveAs() exists");

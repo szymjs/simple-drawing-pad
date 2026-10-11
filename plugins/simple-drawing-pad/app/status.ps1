@@ -9,10 +9,7 @@
 # Since 0.8.0 the program, its files and the drawings live in %USERPROFILE%\simple-drawing-pad: a folder directly under
 # the user profile is the same folder for every program that runs as the user, including the Store version of the
 # Claude app, whose sandbox keeps new folders under AppData and registry entries to itself; Explorer shows it and
-# OneDrive does not sync it. A program still in the old folder (0.5.1 to 0.7.9) is reported as an update to install;
-# the copy of the new program that install.ps1 leaves there for plugin copies of up to 0.7.9 (its version.txt says
-# 0.8.0 or later) is not. A program of up to 0.7.9 that such a plugin copy installed there again next to the program in
-# the new folder is also reported as an update to install: install.ps1 removes it and leaves the copy in its place.
+# OneDrive does not sync it. A program still in the old folder (0.5.1 to 0.7.9) is reported as an update to install.
 # The report reads the real registry through WMI (StdRegProv) for the Windows Settings > Apps line, so it says what
 # Windows shows and not what this process sees, and it names the Store version of the Claude app when it runs inside
 # it (found by walking the parent processes). Both lines are informational; neither changes the state.
@@ -58,7 +55,7 @@ try {
     $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'                    # 'simple-drawing-pad' value: install.ps1 up to 0.7.9
     $entry = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\simple-drawing-pad'   # under HKCU; written by install.ps1 (0.6.2+)
     # up to 0.7.9 the program was in %LOCALAPPDATA%\Programs\simple-drawing-pad, its files and the drawings in
-    # %LOCALAPPDATA%\simple-drawing-pad. install.ps1 moves them; this script only reads them.
+    # %LOCALAPPDATA%\simple-drawing-pad. install.ps1 removes the program and its files; this script only reads them.
     $oldDir = Join-Path $env:LOCALAPPDATA 'Programs\simple-drawing-pad'
     $oldExe = Join-Path $oldDir 'SimpleDrawingPad.exe'
     $oldHashFile = Join-Path $oldDir 'source.sha256'                                # written by install.ps1 0.5.0 to 0.7.9
@@ -66,23 +63,11 @@ try {
     $oldNoticeFile = Join-Path $oldData 'notice.txt'                                # a notice shown by a plugin up to 0.7.9
     $oldLegacyOff = Join-Path $oldData 'no-reminder.txt'                            # uninstall.ps1 0.5.0 to 0.7.9: no notice
 
-    $oldVersionFile = Join-Path $oldDir 'version.txt'                              # written by install.ps1 0.5.1 to 0.7.9, and since 0.9.0 next to the copy it leaves there
     $installed = Test-Path -LiteralPath $exe
-    # the copy of the new program that install.ps1 leaves in the old folder, so that plugin copies of up to 0.7.9 only
-    # start it, is no install of its own: its version.txt names 0.8.0 or later
-    $oldVersion = if (Test-Path -LiteralPath $oldVersionFile) { [IO.File]::ReadAllText($oldVersionFile).Trim() } else { '' }
-    $v = $null
-    $leftCopy = [version]::TryParse($oldVersion, [ref]$v) -and $v -ge [version]'0.8.0'
-    $legacy = (-not $installed) -and (-not $leftCopy) -and (Test-Path -LiteralPath $oldExe)   # installed by a plugin up to 0.7.9 and not moved yet
-    # installed again in the old folder by a plugin copy of up to 0.7.9 after the move (for example one in another Claude
-    # app, when the move was done by 0.8.0, which left no copy there): its Run value and its helper compete with this one
-    $cameBack = $installed -and (-not $leftCopy) -and (Test-Path -LiteralPath $oldExe)
-    # its hash makes the notice about it remembered per reinstall
-    $backHash = if ($cameBack -and (Test-Path -LiteralPath $oldHashFile)) { [IO.File]::ReadAllText($oldHashFile).Trim() } else { '' }
+    $legacy = (-not $installed) -and (Test-Path -LiteralPath $oldExe)   # installed by a plugin up to 0.7.9 and not replaced yet
     # the helper is found without reading other programs' command lines: by the process id it reports in helper.txt
     # (same name, same Windows session; this also finds a helper started as administrator), else, for helpers older
-    # than 0.5.0 that write no helper.txt and for a helper still running from the old folder (not moved yet, or installed
-    # there again), by the program's path
+    # than 0.5.0 that write no helper.txt and for a helper still running from the old folder, by the program's path
     $session = (Get-Process -Id $PID).SessionId
     $helpers = @()
     if (Test-Path -LiteralPath $stateFile) {
@@ -94,7 +79,7 @@ try {
     }
     if ($helpers.Count -eq 0) {
         $helpers = @(Get-Process -Name SimpleDrawingPad -ErrorAction SilentlyContinue |
-            Where-Object { $_.SessionId -eq $session -and ($_.Path -eq $exe -or (($legacy -or $cameBack) -and $_.Path -eq $oldExe)) } | ForEach-Object { [pscustomobject]@{ ProcessId = $_.Id } })
+            Where-Object { $_.SessionId -eq $session -and ($_.Path -eq $exe -or ($legacy -and $_.Path -eq $oldExe)) } | ForEach-Object { [pscustomobject]@{ ProcessId = $_.Id } })
     }
 
     $hk = 'Ctrl+Alt+D'   # a changed shortcut is reported by the helper itself (helper.txt)
@@ -133,12 +118,9 @@ try {
         }
     }
 
-    if ($cameBack) {
+    if ($legacy) {
         $state = 'update-available'
-        $todo = "An earlier plugin version (up to 0.7.9, for example in another Claude app that has not updated yet) installed its helper program again in $oldDir, next to the one in $dir; its helper can take $hk from this one. Run /simple-drawing-pad:install (it removes that program and leaves a copy of the current one there, which such a plugin copy only starts)."
-    } elseif ($legacy) {
-        $state = 'update-available'
-        $todo = "The helper program was installed by an earlier plugin version in $oldDir. Since 0.8.0 the program and the drawings are in one folder, $root, and the helper starts with Windows by a shortcut in the Startup folder; with the Claude app from the Microsoft Store the earlier version did not start after a restart and kept the drawings in that app's own storage. Run /simple-drawing-pad:install (it moves the program and your drawings to $root)."
+        $todo = "The helper program was installed by an earlier plugin version in $oldDir. Since 0.8.0 the program and the drawings are in one folder, $root, and the helper starts with Windows by a shortcut in the Startup folder; with the Claude app from the Microsoft Store the earlier version did not start after a restart. Run /simple-drawing-pad:install (it installs the program in $root and removes the old one; drawings of the earlier version stay in their folder)."
     } elseif (-not $installed) {
         $state = 'not-installed'
         $todo = "The drawing window's helper program is not installed on this computer, so $hk does nothing. Run /simple-drawing-pad:install once on each Windows computer."
@@ -158,19 +140,18 @@ try {
 
     # the notice shown last on this computer. The uninstall marker (also written by 0.5.0) means "already asked";
     # every install deletes them, in the old folder too. A notice shown by a plugin up to 0.7.9 still counts while
-    # the program is not yet in $root, so the move to the new folder does not ask again; once it is there the old
+    # the program is not yet in $root, so the change to the new folder does not ask again; once it is there the old
     # markers are stale and ignored (an install run outside the Store app's sandbox cannot delete the copies that
     # sandbox keeps to itself, and an old uninstall marker must not silence a later problem). An update notice is
     # remembered per installed program ("update-available <hash>", the same marker as 0.8.0 writes), so two plugin copies
     # in different Claude apps, 0.8.0 included, do not show it again to each other. An update notice of a plugin up to
-    # 0.7.9 in the old folder does not silence the notice about the move to $root: it was about another update. The
-    # notice about a program installed again in the old folder is remembered per reinstall ("update-available back <hash>").
+    # 0.7.9 in the old folder does not silence the notice about the new folder $root: it was about another update.
     $shown = ''; $shownFrom = ''
     $markers = if ($installed) { @($noticeFile) } else { $noticeFile, $oldNoticeFile }
     foreach ($f in $markers) { if (-not $shown -and (Test-Path -LiteralPath $f)) { $shown = [IO.File]::ReadAllText($f).Trim(); $shownFrom = $f } }
     if ($legacy -and $shownFrom -eq $oldNoticeFile -and $shown -like 'update-available*') { $shown = '' }
     if ((Test-Path -LiteralPath $legacyOff) -or (-not $installed -and (Test-Path -LiteralPath $oldLegacyOff))) { $shown = 'not-installed' }
-    $updateNotice = $(if ($cameBack) { "update-available back $backHash" } else { "update-available $built" }).Trim()   # trimmed like $shown: an install before 0.5.0 has no hash
+    $updateNotice = "update-available $built".Trim()   # trimmed like $shown: an install before 0.5.0 has no hash
     $notice = if ($state -eq 'update-available') { $updateNotice } else { $state }
     if ($state -eq 'not-running' -and $shown -eq 'not-installed') { $notice = 'not-installed' }   # removed on purpose
 
@@ -186,15 +167,14 @@ try {
             $tell = switch ($state) {
                 'not-installed' {
                     "Simple Drawing Pad - a one-time question on this computer.`n" +
-                    "This plugin works together with a small helper program on this computer: a pencil icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app.`n" +
-                    "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows (a shortcut in your Startup folder) and keeps only your last 10 drawings, on this computer, in $drawings. You can remove it with /simple-drawing-pad:uninstall (also in Windows Settings > Apps, when Windows shows it there).`n" +
+                    "This plugin works together with a small helper program on this computer: a pencil icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app. $hk works in every program; if it clashes with a character on your keyboard layout, change it from the pencil icon's menu (""Change shortcut"").`n" +
+                    "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows (a shortcut in your Startup folder) and keeps only your last drawing, latest.png, in $drawings on this computer, until the next one. You can remove it with /simple-drawing-pad:uninstall (also in Windows Settings > Apps, when Windows shows it there).`n" +
                     "To install it, run /simple-drawing-pad:install, or just answer ""yes"" and Claude runs it for you. This question is not shown again on this computer."
                 }
                 'not-running' { "Simple Drawing Pad: the helper program is installed but not running, so $hk does nothing. /simple-drawing-pad:install starts it again. (Shown once.)" }
                 'shortcut-taken' { "Simple Drawing Pad: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad pencil icon by the clock (under ^ if hidden) and choose ""Change shortcut"". (Shown once.)" }
                 'update-available' {
-                    if ($cameBack) { "Simple Drawing Pad: an earlier version of this plugin, for example in another Claude app that has not updated yet, installed its older helper program again in $oldDir, and that helper can take $hk from the current one. /simple-drawing-pad:install removes it in a few seconds and leaves a copy of the current program there, which that plugin version only starts; drawings made with it meanwhile are moved to $drawings. (Shown once.)" }
-                    elseif ($legacy) { "Simple Drawing Pad: this update keeps the helper program and your drawings in one folder, $root, and starts the helper with Windows by a shortcut in your Startup folder. With the Claude app from the Microsoft Store the previous version did not start after a restart, and its drawings were in that app's own storage. /simple-drawing-pad:install moves everything there in a few seconds, your drawings included. (Shown once.)" }
+                    if ($legacy) { "Simple Drawing Pad: this update keeps the helper program and your drawings in one folder, $root, and starts the helper with Windows by a shortcut in your Startup folder. With the Claude app from the Microsoft Store the previous version did not start after a restart. /simple-drawing-pad:install installs the program there in a few seconds and removes the old one; drawings of the previous version stay where they are. (Shown once.)" }
                     else { "Simple Drawing Pad: this plugin version comes with an updated helper program. /simple-drawing-pad:install updates it in a few seconds. (Shown once.)" }
                 }
             }
@@ -205,7 +185,8 @@ try {
             'The user has just been shown a one-time question, in the session-start message, whether to install it; it is not shown again. ' +
             "If the user agrees (for example answers yes, in any language) or asks for it, run the /simple-drawing-pad:install command for them: it is the plugin's only installation path, and it installs, checks and tells the user whether it works. " +
             'If their first message is about something else, end your reply with one short sentence offering the installation; if they decline or ignore it, do not bring it up again. ' +
-            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows (a shortcut in the Startup folder), keeps only the last 10 drawings in $drawings (one folder under the user profile, the same for every program on this computer), and can be removed with /simple-drawing-pad:uninstall (also in Windows Settings > Apps, when Windows shows it there)."
+            "Whenever you offer or explain the installation yourself, include one sentence that $hk works in every program and, if it clashes with a character on their keyboard layout, they can change it from the pencil icon's menu (Change shortcut). " +
+            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows (a shortcut in the Startup folder), keeps only the last drawing, latest.png, in $drawings until the next one (one folder under the user profile, the same for every program on this computer), and can be removed with /simple-drawing-pad:uninstall (also in Windows Settings > Apps, when Windows shows it there)."
         } elseif ($tell) {
             "Simple Drawing Pad plugin, pen window status on this Windows computer: $state. $todo The user has just been shown this once. If they want to draw or ask about it, offer the fix; ask before installing."
         } else {
@@ -240,19 +221,19 @@ try {
     } catch { }
 
     'Simple Drawing Pad on this computer'
-    'Program:   ' + $(if ($installed) { "installed ($exe)" + $(if ($cameBack) { ", and an earlier plugin version installed its program again in $oldExe" }) } elseif ($legacy) { "installed by an earlier plugin version ($oldExe); not yet moved to $dir" } else { 'not installed' })
+    'Program:   ' + $(if ($installed) { "installed ($exe)" } elseif ($legacy) { "installed by an earlier plugin version ($oldExe); not yet replaced by one in $dir" } else { 'not installed' })
     'Helper:    ' + $(switch ($helpers.Count) { 0 { 'not running' } 1 { "running (process $($helpers[0].ProcessId))" }
                           default { "$_ running (processes $(($helpers | ForEach-Object { $_.ProcessId }) -join ', ')); /simple-drawing-pad:install restarts one" } })
     'Shortcut:  ' + $(switch ($shortcut) { 'ok' { "$hk works" } 'taken' { "$hk is taken by another program" } default { "$hk (not reported by the helper)" } })
     'Autostart: ' + $(if ($autostart) { 'on (shortcut in the Startup folder)' } else { 'off (the helper does not start by itself after a restart)' }) +
                     $(if ($oldRun) { '; legacy registry entry present (removed by /simple-drawing-pad:install)' })
-    'Drawings:  ' + $drawings + ' (this computer only, the last 10 are kept)'
+    'Drawings:  ' + $drawings + ' (this computer only; keeps only the last drawing, latest.png, until the next one)'
     if ($installed -or $legacy) { 'Removal:   /simple-drawing-pad:uninstall ' + $(if ($listed) { '(also listed in Windows Settings > Apps)' } else { '(not listed in Windows Settings > Apps on this computer)' }) }
     if ($storeApp) { 'Claude app: Microsoft Store version (its sandbox keeps registry entries and new AppData folders to itself)' }
     if ($outdated) { 'Update:    this plugin version comes with an updated helper program' }
-    elseif ($legacy) { "Update:    this plugin version moves the program and your drawings to $root" }
+    elseif ($legacy) { "Update:    this plugin version installs the program in $root and removes the old one" }
     if ($ahead) { "Version:   the installed program is newer ($ahead); nothing to do" }
-    if ($shown -match '^(not-installed|not-running|shortcut-taken|update-available)( back)?( [0-9a-f]{64})?$') { "Notice:    already shown on this computer ($($shown.Split(' ')[0])); not shown again" }
+    if ($shown -match '^(not-installed|not-running|shortcut-taken|update-available)( [0-9a-f]{64})?$') { "Notice:    already shown on this computer ($($shown.Split(' ')[0])); not shown again" }
     "Result: ${state}: $todo"
 } catch {
     # the SessionStart hook stays silent; a failed check is no reason to bother the user at every session

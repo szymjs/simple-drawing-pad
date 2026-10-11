@@ -93,10 +93,10 @@
 <script>
 // Simple Drawing Pad: a pressure-sensitive drawing pad for sketching ideas to Claude. One offline file: no network requests of its own, no storage.
 // The drawing leaves the page only when the user asks. Send to Claude (only for the owner of an artifact published from Claude Code)
-// hands the picture to the artifact viewer, which stores it with the artifact, and a comment sent to Claude names it (where that comment
-// is not posted, a Tell Claude tap can try it once more). Copy puts it on the clipboard, Save picture downloads a PNG (inside a frame it
-// shows the picture instead, because a download there can replace the board), and where either is blocked (artifact sandbox, phone) the
-// picture is shown so the user can long-press it or take a screenshot. Clear can be undone, so it asks nothing.
+// hands the picture to the artifact viewer, which stores it with the artifact; the user then writes "done" in the chat and Claude reads
+// it from there. Copy puts it on the clipboard, Save picture downloads a PNG (inside a frame it shows the picture instead, because a
+// download there can replace the board), and where either is blocked (artifact sandbox, phone) the picture is shown so the user can
+// long-press it or take a screenshot. Clear can be undone, so it asks nothing.
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
 const touch = matchMedia('(pointer: coarse)').matches; // a finger is the main pointer (phone, tablet): no keyboard shortcuts in messages
 const K = isMac ? {undo: '⌘Z', redo: '⇧⌘Z', paste: '⌘V'} : {undo: 'Ctrl+Z', redo: 'Ctrl+Y', paste: 'Ctrl+V'};
@@ -120,19 +120,13 @@ const L = { pen: 'Pen', eraser: 'Eraser', thin: 'thin', medium: 'medium', thick:
   saveBlocked: 'Saving a file is blocked here. Long-press the picture and choose Save to Photos, or right-click it and choose Save image as.',
   saveEmbedded: 'Long-press the picture and choose Save to Photos, or right-click it and choose Save image as.',
   fsFail: 'Full screen is not available here.',
-  send: 'Send to Claude', sending: 'Sending...', sent: 'Sent', tell: 'Tell Claude',
-  hintSend: 'Draw, then ' + (touch ? 'tap' : 'click') + ' Send to Claude.',
-  hintSendDone: 'Draw, then ' + (touch ? 'tap' : 'click') + ' Send to Claude and write "done" in the chat.',
-  sentTold: 'Sent to Claude. The drawing will show up in the chat in a moment.',
-  sentDone: 'Sent. Now write "done" in the chat, and Claude will look at it.',
-  sentAsk: 'The drawing is saved, but Claude was not told yet. ' + (touch ? 'Tap' : 'Click') + ' Tell Claude so Claude knows, or write "done" in the chat.',
-  tellFail: 'Claude still could not be told. The drawing is saved, so write "done" in the chat, and Claude will look at it.',
-  sentAgain: 'This drawing was already sent. Change it to send a new one.',
-  sentAgainDone: 'This drawing was already sent. Write "done" in the chat, or change the drawing to send a new one.',
-  note: 'I sent a drawing from the board (picture {id}). Please look at it.',
+  send: 'Send to Claude', sending: 'Sending...', sent: 'Sent',
+  hintSend: 'Draw, then ' + (touch ? 'tap' : 'click') + ' Send to Claude and write "done" in the chat.',
+  sentDone: 'Sent. The drawing is saved; now write "done" in the chat, and Claude will look at it.',
+  sentAgain: 'This drawing was already sent. Write "done" in the chat, or change the drawing to send a new one.',
   sendFail: 'Sending did not work here. Use Copy, or take a screenshot and attach it.',
   sendWait: 'Too many sends in a row. Wait a moment, then ' + (touch ? 'tap' : 'click') + ' Send to Claude again.',
-  tSend: 'Send the picture to Claude (it is stored with this board)', tTell: 'Tell Claude about the stored picture (it is not stored again)',
+  tSend: 'Send the picture to Claude (it is stored with this board)',
   tPen: 'Pen (P)', tEraser: 'Eraser (E). The back end of a pen also erases.', tGrid: 'Grid (G)', tUndo: 'Undo (' + K.undo + '). Redo: ' + K.redo,
   tClear: 'Clear the whole drawing (Undo brings it back)', tCopy: 'Copy the picture, then paste it into the chat (C)', tSave: 'Save the picture as a PNG file', tFull: 'Full screen (F): bigger board' };
 document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = L[el.dataset.i18n]);
@@ -161,10 +155,9 @@ const bar = document.getElementById('bar'), cv = document.getElementById('c'), c
 let color = '#1d1d1f', size = 4, mode = 'pen', barH = 52;
 const strokes = [], undone = [];
 let cur = null;
-// counts the changes to the drawing (a finished stroke, undo, redo, clear), so Send to Claude knows whether this drawing was sent already;
-// a change also forgets the stored picture that Tell Claude would name
+// counts the changes to the drawing (a finished stroke, undo, redo, clear), so Send to Claude knows whether this drawing was sent already
 let version = 0;
-function changed() { version++; askId = null; showSend(); }
+function changed() { version++; showSend(); }
 
 function resize() {
   barH = bar.offsetHeight;
@@ -336,77 +329,42 @@ function copy() {
 }
 $('copy').onclick = copy;
 
-// Send to Claude: only in an artifact published from Claude Code with the `assets` and `comments` capabilities, for its owner, whose
-// viewer grants the artifact's file store. The picture is stored with the artifact, and a comment sent to Claude (anchored at the button)
-// wakes the Claude session that published the board and names the picture. When that comment is not posted but a later tap may get it
-// through, the button turns into Tell Claude, whose tap posts only the comment for the stored picture, once; where the comment cannot be
-// sent from this view, or Tell Claude fails too, the user writes "done".
+// Send to Claude: only in an artifact published from Claude Code with the `assets` capability, for its owner, whose viewer grants the
+// artifact's file store. The picture is stored with the artifact, and the user writes "done" in the chat, so Claude reads it from there.
 // Elsewhere (a plain browser, Claude Code's browser pane, a chat artifact, a saved file) the button stays hidden.
-let store = null, notes = null, sending = false, sentVersion = -1, told = false, askId = null;
-// the button shows its state: sending (and disabled), Tell Claude (the stored picture's comment was not posted), sent (until the drawing
-// changes), or ready
+let store = null, sending = false, sentVersion = -1;
+// the button shows its state: sending (and disabled), sent (until the drawing changes), or ready
 function showSend() {
   if (!store) return;
-  const b = $('send'), same = !sending && version === sentVersion, ask = same && askId !== null, done = same && !ask;
-  const t = sending ? L.sending : ask ? L.tell : done ? L.sent : L.send;
+  const b = $('send'), done = !sending && version === sentVersion;
+  const t = sending ? L.sending : done ? L.sent : L.send;
   b.disabled = sending; b.classList.toggle('done', done);
-  b.querySelector('.ic').textContent = sending ? '⏳' : ask ? '📣' : done ? '✓' : '📨';
-  b.querySelector('.tx').textContent = t; b.setAttribute('aria-label', t); b.title = ask ? L.tTell : L.tSend;
+  b.querySelector('.ic').textContent = sending ? '⏳' : done ? '✓' : '📨';
+  b.querySelector('.tx').textContent = t; b.setAttribute('aria-label', t);
   // the button keeps the width of its longest label, so a shorter one never rewraps the toolbar and moves the drawing
   if (t === L.send) { b.style.minWidth = ''; b.style.minWidth = b.offsetWidth + 'px'; }
   barChanged();
 }
 if (window.claude && typeof window.claude.use === 'function') {
-  const use = name => new Promise(ok => ok(window.claude.use(name))).catch(() => null);
-  Promise.all([use('assets'), use('comments')]).then(([a, c]) => {
+  new Promise(ok => ok(window.claude.use('assets'))).catch(() => null).then(a => {
     if (!a) return;
-    // the hint asks for "done" only where a comment to Claude cannot be sent now; each send checks again
-    const can = c ? new Promise(ok => ok(c.canSendToClaude())).catch(() => 'off') : 'off';
-    return Promise.resolve(can).then(s => {
-      const h = s === 'available' ? L.hintSend : L.hintSendDone;
-      store = a; notes = c;
-      $('send').hidden = false; $('hint').textContent = h; bar.scrollLeft = 0; showSend();
-      if (noHint()) toast(h, 7000);
-    });
+    store = a;
+    $('send').hidden = false; $('hint').textContent = L.hintSend; bar.scrollLeft = 0; showSend();
+    if (noHint()) toast(L.hintSend, 7000);
   });
-}
-// the platform's codes that no later tap can change (refused, or a page or runtime fault); any other rejection, an unknown code too,
-// may go through from a fresh tap: claude_unavailable (no session, or the call no longer counted as the viewer's tap), consent_required,
-// rate_limited, unavailable, upstream_error
-const finalCodes = ['forbidden', 'invalid', 'not_found', 'not_granted', 'capability_disabled', 'capability_removed', 'transform_error'];
-// resolves 'told' once a comment sent to Claude names picture `id`; 'again' when it was not posted but Tell Claude may get it through;
-// 'done' when it cannot be sent from this view (no comments, not an editor, sending to Claude off, refused) and the user writes "done".
-// It never rejects.
-function tellClaude(id) {
-  if (!notes) return Promise.resolve('done');
-  return new Promise(ok => ok(notes.canSendToClaude())).catch(() => 'off').then(s => s === 'no_session' ? 'again' : s !== 'available' ? 'done'
-    : new Promise(ok => ok(notes.anchorFor($('send')))).then(anchor => notes.sendToClaude({anchor, text: L.note.replace('{id}', id)}))
-      .then(() => 'told', e => finalCodes.includes(e && e.code) ? 'done' : 'again'));
 }
 $('send').onclick = () => {
   if (!store || sending) return;
-  // Tell Claude: a tap of its own posts only the comment for the stored picture, once, and the button then says Sent either way
-  if (askId !== null) {
-    sending = true; showSend();
-    tellClaude(askId).then(r => { told = r === 'told'; toast(told ? L.sentTold : L.tellFail, 8000); })
-      .finally(() => { askId = null; sending = false; showSend(); });
-    return;
-  }
   if (!hasInk()) return toast(L.empty);
   // the same drawing is not stored twice: the button already says Sent, and a tap only says so
-  if (version === sentVersion) return toast(told ? L.sentAgain : L.sentAgainDone, 6000);
+  if (version === sentVersion) return toast(L.sentAgain, 6000);
   let out;
   try { out = picture(); } catch (e) { return toast(L.shotFail, 8000); }
   const v = version;
   sending = true; showSend();
   new Promise((ok, fail) => out.toBlob(b => { out.width = out.height = 0; if (b) ok(b); else fail(new Error('toBlob')); }, 'image/png'))
     .then(b => store.upload(b, {type: 'image/png'}))
-    .then(r => { sentVersion = v; told = false; return tellClaude(r.id).then(t => {
-        told = t === 'told';
-        // a drawing changed meanwhile shows Send to Claude again, so only the unchanged one offers Tell Claude
-        if (t === 'again' && version === v) askId = r.id;
-        toast(told ? L.sentTold : askId !== null ? L.sentAsk : L.sentDone, 8000);
-      }); },
+    .then(() => { sentVersion = v; toast(L.sentDone, 8000); },
       e => {
         const c = e && e.code;
         // this view cannot store files at all: the button goes, and the hint names Copy or a screenshot again

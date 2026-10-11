@@ -5,12 +5,10 @@
 # file uses nothing from the plugin folder. /simple-drawing-pad:uninstall (install.ps1 -Uninstall) runs the plugin's own copy.
 #   .\uninstall.ps1            remove it and print what was done
 #   .\uninstall.ps1 -Settings  the same, started from Windows Settings: the result is shown in a small message window
-# Removed: the running helper; the shortcut "Simple Drawing Pad.lnk" in the Startup folder (0.8.0); the Run values
-# simple-drawing-pad (up to 0.7.9) and drawing-board (up to 0.3.0); the Settings > Apps entry; app\ and helper.txt in
-# %USERPROFILE%\simple-drawing-pad; the program files of up to 0.7.9 in %LOCALAPPDATA%\Programs\simple-drawing-pad, or
-# the copy of the program and version.txt that install.ps1 leaves there for plugin copies of up to 0.7.9 (0.9.0), and
-# helper.txt in %LOCALAPPDATA%\simple-drawing-pad (the helper also writes its report there while that copy exists), with
-# that folder when it is empty.
+# Removed: the running helper; the shortcut "Simple Drawing Pad.lnk" in the Startup folder (0.8.0); the Run value
+# simple-drawing-pad (up to 0.7.9); the Settings > Apps entry; app\ and helper.txt in %USERPROFILE%\simple-drawing-pad;
+# the program files of up to 0.7.9 in %LOCALAPPDATA%\Programs\simple-drawing-pad and helper.txt in
+# %LOCALAPPDATA%\simple-drawing-pad, with that folder when it is empty.
 # Kept, where present: drawings\ and shortcut.txt in %USERPROFILE%\simple-drawing-pad, and the drawings and settings of older versions.
 # Written: notice.txt and no-reminder.txt in %USERPROFILE%\simple-drawing-pad, so the session-start question stays quiet.
 param([switch]$Settings)
@@ -27,23 +25,21 @@ $offFile = Join-Path $root 'no-reminder.txt'                                # 0.
 $settingFile = Join-Path $root 'shortcut.txt'                               # the shortcut setting; kept
 $startupDir = [Environment]::GetFolderPath('Startup')                        # no Create: an uninstall creates nothing; '' when the folder does not exist
 $startup = if ($startupDir) { Join-Path $startupDir 'Simple Drawing Pad.lnk' }   # written by install.ps1 -Autostart (0.8.0)
-$run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'               # values written by -Autostart up to 0.7.9 and by 0.3.0; only removed
+$run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'               # the value written by -Autostart up to 0.7.9; only removed
 $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\simple-drawing-pad'   # the Settings > Apps entry (0.6.2+)
 # where 0.5.1-0.7.9 kept the program and its data; see install.ps1. Drawings and settings left there are not touched
 $oldDir = Join-Path $env:LOCALAPPDATA 'Programs\simple-drawing-pad'
 $oldExe = Join-Path $oldDir 'SimpleDrawingPad.exe'
 $oldData = Join-Path $env:LOCALAPPDATA 'simple-drawing-pad'
-# previous name of this program (up to 0.3.0); see install.ps1
-$legacyExe = Join-Path $env:LOCALAPPDATA 'Programs\drawing-board\DrawingBoard.exe'
 
-# same as in install.ps1: stops only our helper (installed copy, the copy of up to 0.7.9, bin\ copy or the previous version's copy).
+# same as in install.ps1: stops only our helper (installed copy, the copy of up to 0.7.9 or bin\ copy).
 # A copy of up to 0.7.9 installed from inside the Store app's sandbox runs from the sandbox's private copy of its folder
 # (...\Packages\Claude_...\LocalCache\Local\Programs\simple-drawing-pad\), so that folder name is matched by its ending too
 function Stop-Helper {
-    $ours = @(Get-CimInstance Win32_Process -Filter "Name='SimpleDrawingPad.exe' OR Name='DrawingBoard.exe'" |
-        Where-Object { $_.ExecutablePath -eq $exe -or $_.ExecutablePath -eq $oldExe -or $_.ExecutablePath -eq $bin -or $_.ExecutablePath -eq $legacyExe -or $_.ExecutablePath -like '*\Programs\simple-drawing-pad\SimpleDrawingPad.exe' } |
+    $ours = @(Get-CimInstance Win32_Process -Filter "Name='SimpleDrawingPad.exe'" |
+        Where-Object { $_.ExecutablePath -eq $exe -or $_.ExecutablePath -eq $oldExe -or $_.ExecutablePath -eq $bin -or $_.ExecutablePath -like '*\Programs\simple-drawing-pad\SimpleDrawingPad.exe' } |
         ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
-    if ($ours | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.MainWindowTitle -like 'Simple Drawing Pad*' -or $_.MainWindowTitle -eq 'drawing-board') }) {
+    if ($ours | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like 'Simple Drawing Pad*' }) {
         throw 'Close the open Simple Drawing Pad window first (the drawing window: Enter or Esc).'
     }
     foreach ($p in $ours) {
@@ -63,17 +59,6 @@ function Remove-OldAutostart {
     return $true
 }
 
-# same as in install.ps1: removes the previous version's Run value only if it starts exactly $legacyExe; $true if removed
-function Remove-LegacyAutostart {
-    $v = Get-ItemProperty -LiteralPath $run -Name 'drawing-board' -ErrorAction SilentlyContinue
-    if (-not $v) { return $false }
-    $cmd = ([string]$v.'drawing-board').Trim()
-    $path = if ($cmd.StartsWith('"')) { $cmd.Substring(1).Split('"')[0] } else { $cmd.Split(' ')[0] }
-    if ($path -ne $legacyExe) { return $false }
-    Remove-ItemProperty -LiteralPath $run -Name 'drawing-board'
-    return $true
-}
-
 $failed = $null
 try {
     # leave the program's folder, so it can be removed at the end
@@ -81,7 +66,6 @@ try {
     Stop-Helper
     if ($startup -and (Test-Path -LiteralPath $startup)) { Remove-Item -LiteralPath $startup }
     Remove-OldAutostart | Out-Null
-    Remove-LegacyAutostart | Out-Null
     foreach ($f in $exe, (Join-Path $dir 'source.sha256'), (Join-Path $dir 'version.txt'), $stateFile,
                    $oldExe, (Join-Path $oldDir 'source.sha256'), (Join-Path $oldDir 'version.txt'), (Join-Path $oldData 'helper.txt')) {
         if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f }
