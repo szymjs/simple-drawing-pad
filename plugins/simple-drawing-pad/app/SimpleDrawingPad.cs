@@ -88,6 +88,9 @@ namespace SimpleDrawingPadApp
         [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint mods, uint vk);
         [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+        [DllImport("user32.dll")] public static extern IntPtr GetMessageExtraInfo();
+        // mouse messages that Windows made from a pen or touch carry this signature in GetMessageExtraInfo
+        public static bool FromPenOrTouch() { return (GetMessageExtraInfo().ToInt64() & 0xFFFFFF00) == 0xFF515700; }
         [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
         public const int WM_HOTKEY = 0x0312;
         public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4;
@@ -133,6 +136,7 @@ namespace SimpleDrawingPadApp
     class Stroke
     {
         public Color Color; public float Width; public bool Eraser;
+        public bool FromPen = true;   // false for a mouse stroke (tablet mode lets the mouse draw while the pen is away)
         public List<PointF> Pts = new List<PointF>(); public List<float> Pr = new List<float>();
     }
 
@@ -173,6 +177,11 @@ namespace SimpleDrawingPadApp
         Rectangle lastCursorRect = Rectangle.Empty;
         PointF penAt;
         IntPtr ctx = IntPtr.Zero;
+        // tablet mode: true while the pen is in the tablet's range. A Wintab driver can be installed with no tablet
+        // attached (an old driver left behind), so the mouse draws too, but only while the pen is away: a pen moves the
+        // system cursor as well, and its mouse messages would draw every stroke twice
+        bool penNear;
+        bool MouseDraws { get { return ctx == IntPtr.Zero || (!penNear && !Native.FromPenOrTouch()); } }
         int maxPressure = 1023;
         public string SavedPath;
         string saveAsPath;                  // Shift+Enter: where the extra copy goes; null otherwise
@@ -223,14 +232,10 @@ namespace SimpleDrawingPadApp
         void BuildBar()
         {
             bar.Dock = DockStyle.Top; bar.Height = 48; bar.BackColor = Color.White;
-            bar.Paint += delegate(object s, PaintEventArgs e) { DrawVersion(e.Graphics); };
+            bar.Paint += delegate(object s, PaintEventArgs e) { DrawLevelMarks(e.Graphics); DrawVersion(e.Graphics); };
             Controls.Add(bar);
             int x = 10;
-            for (int i = 0; i < 5; i++)
-            {
-                int n = i + 1;
-                x = AddButton(n.ToString(), x, delegate { SetLevel(n); });
-            }
+            for (int i = 0; i < 5; i++) x = AddLevelButton(i + 1, x);
             x += 10;
             for (int i = 0; i < Palette.Length; i++)
             {
@@ -254,6 +259,33 @@ namespace SimpleDrawingPadApp
             UpdateStatus();
         }
 
+        // keys 1-5: ordinary buttons with the digit like the colour buttons; under each one the bar shows a short line as
+        // thick as the line it draws. The chosen width's line is in the pen colour (grey with the eraser on), the others pale.
+        readonly List<Button> levelButtons = new List<Button>();
+        static readonly float[] LevelMarks = { 1f, 1.5f, 2.5f, 3.5f, 5f };   // the 1-2-4-7-12 levels, squeezed into the 9 px under the buttons
+        int AddLevelButton(int n, int x)
+        {
+            int next = AddButton(n.ToString(), x, delegate { SetLevel(n); }, string.Format("Line width {0} (key {0})", n));
+            levelButtons.Add((Button)bar.Controls[bar.Controls.Count - 1]);
+            return next;
+        }
+        void DrawLevelMarks(Graphics g)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            for (int i = 0; i < levelButtons.Count; i++)
+            {
+                Rectangle b = levelButtons[i].Bounds;
+                float w = LevelMarks[i], y = b.Bottom + 4.5f;
+                bool chosen = i + 1 == level;
+                Color c = !chosen ? Color.FromArgb(190, 190, 190) : Erasing ? Color.FromArgb(110, 110, 110) : color;
+                using (Pen line = new Pen(c, w))
+                {
+                    line.StartCap = LineCap.Round; line.EndCap = LineCap.Round;
+                    g.DrawLine(line, b.Left + 5 + w / 2, y, b.Right - 5 - w / 2, y);
+                }
+            }
+        }
+
         int AddButton(string text, int x, EventHandler onClick) { return AddButton(text, x, onClick, null); }
         int AddButton(string text, int x, EventHandler onClick, string tip)
         {
@@ -271,10 +303,10 @@ namespace SimpleDrawingPadApp
         {
             FitStatus();
             hint.SetToolTip(status, ctx != IntPtr.Zero
-                ? "Tablet mode: while this window is active, the whole tablet draws on this sheet. Pen back end or a side button = eraser."
+                ? "Tablet mode: while this window is active, the whole tablet draws on this sheet. Pen back end or a side button = eraser. The mouse draws too while the pen is away."
                 : "Mouse mode: draws where the mouse, pen or finger is (no Wintab tablet driver, or a pen display / touch screen).");
             if (hover) InvalidateCursor();   // the circle may have grown (eraser, width)
-            bar.Invalidate();                // the version text hides itself if the longer status would reach it
+            bar.Invalidate();                // the width lines (width, colour, eraser); the version text hides itself if the longer status would reach it
         }
         // the full text, or a shorter one when it would run past the end of the bar (125% scaling or more, a 1366-px
         // screen): the colour name is left out first, then "width n/5". "Shift+Enter: save as" always stays.
@@ -356,8 +388,12 @@ namespace SimpleDrawingPadApp
                 if (Wintab.WTPacket(m.LParam, (uint)m.WParam.ToInt64(), ref p)) OnPen(p);
                 return;
             }
-            // pen left the tablet's range: the stroke ends even if no "lifted" packet arrived
-            if (m.Msg == Wintab.WT_PROXIMITY && (m.LParam.ToInt64() & 0xFFFF) == 0) cur = null;
+            // pen entered or left the tablet's range; leaving ends the stroke even if no "lifted" packet arrived
+            if (m.Msg == Wintab.WT_PROXIMITY && ctx != IntPtr.Zero)
+            {
+                if ((m.LParam.ToInt64() & 0xFFFF) != 0) PenArrived();
+                else { cur = null; touchPending = false; PenLeft(); }
+            }
             base.WndProc(ref m);
         }
 
@@ -377,6 +413,7 @@ namespace SimpleDrawingPadApp
             bool tipDown = (p.pkButtons & 1) != 0;
             if (tipDown) tipBitSeen = true;
             bool inRange = (p.pkStatus & Wintab.TPS_PROXIMITY) == 0;
+            if (inRange) PenArrived(); else PenLeft();
             bool contact = inRange && (tipBitSeen ? tipDown : pr > 0.01f);
             if (contact)
             {
@@ -411,16 +448,33 @@ namespace SimpleDrawingPadApp
             Invalidate(SheetToScreen(RectangleF.FromLTRB(Math.Min(a.X, b.X) - m, Math.Min(a.Y, b.Y) - m, Math.Max(a.X, b.X) + m, Math.Max(a.Y, b.Y) + m)));
         }
 
-        // ---------- mouse fallback (no Wintab)
+        // the cursor is kept on the sheet while the pen is near (a pen tap can never hit the toolbar), and freed when
+        // the pen leaves, so the mouse can reach the toolbar and other windows
+        void PenArrived()
+        {
+            if (penNear) return;
+            penNear = true;
+            if (cur != null && !cur.FromPen) cur = null;   // a mouse stroke ends when the pen comes
+            if (Form.ActiveForm == this) Reclip();
+        }
+        void PenLeft()
+        {
+            if (!penNear) return;
+            penNear = false; hover = false;
+            Native.ClipCursor(IntPtr.Zero);
+            Invalidate(lastCursorRect);
+        }
+
+        // ---------- mouse (no Wintab, or the pen is away from the tablet)
         PointF ToSheet(Point pt)
         {
             Rectangle r = SheetRect();
             return new PointF(Math.Max(0, Math.Min(SheetW, (pt.X - r.Left) * (float)SheetW / r.Width)),
                               Math.Max(0, Math.Min(SheetH, (pt.Y - r.Top) * (float)SheetH / r.Height)));
         }
-        protected override void OnMouseDown(MouseEventArgs e) { if (ctx == IntPtr.Zero && e.Button == MouseButtons.Left) StartStroke(ToSheet(e.Location), 0.55f, false); }
-        protected override void OnMouseMove(MouseEventArgs e) { if (ctx == IntPtr.Zero && cur != null) AddPoint(ToSheet(e.Location), 0.55f); }
-        protected override void OnMouseUp(MouseEventArgs e) { if (ctx == IntPtr.Zero) cur = null; }
+        protected override void OnMouseDown(MouseEventArgs e) { if (MouseDraws && e.Button == MouseButtons.Left) { StartStroke(ToSheet(e.Location), 0.55f, false); cur.FromPen = false; } }
+        protected override void OnMouseMove(MouseEventArgs e) { if (MouseDraws && cur != null && !cur.FromPen) AddPoint(ToSheet(e.Location), 0.55f); }
+        protected override void OnMouseUp(MouseEventArgs e) { if (MouseDraws && cur != null && !cur.FromPen) cur = null; }
 
         // ---------- drawing
         void StartStroke(PointF pt, float pr, bool eraserTip)
@@ -503,7 +557,7 @@ namespace SimpleDrawingPadApp
         // the clip follows the sheet (tablet mode, active window only); a minimized board frees the cursor
         void Reclip()
         {
-            if (inMoveSize || ctx == IntPtr.Zero || Form.ActiveForm != this) return;
+            if (inMoveSize || ctx == IntPtr.Zero || !penNear || Form.ActiveForm != this) return;
             if (WindowState == FormWindowState.Minimized) Native.ClipCursor(IntPtr.Zero); else ClipToWindow();
         }
 
@@ -517,13 +571,13 @@ namespace SimpleDrawingPadApp
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
-            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, true); Wintab.WTOverlap(ctx, true); ClipToWindow(); }
+            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, true); Wintab.WTOverlap(ctx, true); Reclip(); }
         }
         protected override void OnDeactivate(EventArgs e)
         {
             base.OnDeactivate(e);
             Native.ClipCursor(IntPtr.Zero);
-            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, false); cur = null; hover = false; Invalidate(); }
+            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, false); cur = null; hover = false; penNear = false; Invalidate(); }
         }
         // keys are handled before any button sees them (Enter would otherwise click a focused button,
         // and the arrow keys sent by the numpad with Num Lock off would move focus)
