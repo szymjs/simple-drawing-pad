@@ -6,13 +6,15 @@
 // It works only on this computer: no network access, nothing is sent or collected.
 //
 // Usage:  SimpleDrawingPad.exe --board  open the board now, exit after closing it
-//         SimpleDrawingPad.exe          the same as --tray (the Store app and its startup task start it without arguments)
+//         SimpleDrawingPad.exe          --tray, and also opens the board: a start from the Start menu, the Store's Open
+//                                       button or a double click. If a helper already runs, that helper opens the board.
+//                                       The Store package's startup task at sign-in passes --tray (store/AppxManifest.xml).
 //         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
 //                                       the tray menu, kept in %USERPROFILE%\simple-drawing-pad\shortcut.txt) opens the board.
 //                                       When that file does not exist, the setting of 0.7.9 and earlier is read once from
 //                                       %APPDATA%\simple-drawing-pad\shortcut.txt (read only, never written there).
 //                                       One helper per user session: a second --tray start exits at once, quietly
-//                                       (named mutex Local\SimpleDrawingPad.Tray).
+//                                       (named mutex Local\SimpleDrawingPad.Tray). One click on the tray icon opens the board.
 // Folder: everything is in %USERPROFILE%\simple-drawing-pad (for example C:\Users\name\simple-drawing-pad). A folder
 //         directly under the user profile is the same folder for every program that runs as the user, including the
 //         Store version of the Claude app, whose sandbox keeps new folders under AppData to itself; Explorer shows
@@ -88,6 +90,11 @@ namespace SimpleDrawingPadApp
         [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint mods, uint vk);
         [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+        [DllImport("user32.dll")] public static extern IntPtr GetMessageExtraInfo();
+        [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int processId);
+        // mouse messages that Windows made from a pen or touch carry this signature in GetMessageExtraInfo
+        public static bool FromPenOrTouch() { return (GetMessageExtraInfo().ToInt64() & 0xFFFFFF00) == 0xFF515700; }
         [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
         public const int WM_HOTKEY = 0x0312;
         public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4;
@@ -133,6 +140,7 @@ namespace SimpleDrawingPadApp
     class Stroke
     {
         public Color Color; public float Width; public bool Eraser;
+        public bool FromPen = true;   // false for a mouse stroke (tablet mode lets the mouse draw while the pen is away)
         public List<PointF> Pts = new List<PointF>(); public List<float> Pr = new List<float>();
     }
 
@@ -173,6 +181,11 @@ namespace SimpleDrawingPadApp
         Rectangle lastCursorRect = Rectangle.Empty;
         PointF penAt;
         IntPtr ctx = IntPtr.Zero;
+        // tablet mode: true while the pen is in the tablet's range. A Wintab driver can be installed with no tablet
+        // attached (an old driver left behind), so the mouse draws too, but only while the pen is away: a pen moves the
+        // system cursor as well, and its mouse messages would draw every stroke twice
+        bool penNear;
+        bool MouseDraws { get { return ctx == IntPtr.Zero || (!penNear && !Native.FromPenOrTouch()); } }
         int maxPressure = 1023;
         public string SavedPath;
         string saveAsPath;                  // Shift+Enter: where the extra copy goes; null otherwise
@@ -223,14 +236,10 @@ namespace SimpleDrawingPadApp
         void BuildBar()
         {
             bar.Dock = DockStyle.Top; bar.Height = 48; bar.BackColor = Color.White;
-            bar.Paint += delegate(object s, PaintEventArgs e) { DrawVersion(e.Graphics); };
+            bar.Paint += delegate(object s, PaintEventArgs e) { DrawLevelMarks(e.Graphics); DrawVersion(e.Graphics); };
             Controls.Add(bar);
             int x = 10;
-            for (int i = 0; i < 5; i++)
-            {
-                int n = i + 1;
-                x = AddButton(n.ToString(), x, delegate { SetLevel(n); });
-            }
+            for (int i = 0; i < 5; i++) x = AddLevelButton(i + 1, x);
             x += 10;
             for (int i = 0; i < Palette.Length; i++)
             {
@@ -254,6 +263,33 @@ namespace SimpleDrawingPadApp
             UpdateStatus();
         }
 
+        // keys 1-5: ordinary buttons with the digit like the colour buttons; under each one the bar shows a short line as
+        // thick as the line it draws. The chosen width's line is in the pen colour (grey with the eraser on), the others pale.
+        readonly List<Button> levelButtons = new List<Button>();
+        static readonly float[] LevelMarks = { 1f, 1.5f, 2.5f, 3.5f, 5f };   // the 1-2-4-7-12 levels, squeezed into the 9 px under the buttons
+        int AddLevelButton(int n, int x)
+        {
+            int next = AddButton(n.ToString(), x, delegate { SetLevel(n); }, string.Format("Line width {0} (key {0})", n));
+            levelButtons.Add((Button)bar.Controls[bar.Controls.Count - 1]);
+            return next;
+        }
+        void DrawLevelMarks(Graphics g)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            for (int i = 0; i < levelButtons.Count; i++)
+            {
+                Rectangle b = levelButtons[i].Bounds;
+                float w = LevelMarks[i], y = b.Bottom + 4.5f;
+                bool chosen = i + 1 == level;
+                Color c = !chosen ? Color.FromArgb(190, 190, 190) : Erasing ? Color.FromArgb(110, 110, 110) : color;
+                using (Pen line = new Pen(c, w))
+                {
+                    line.StartCap = LineCap.Round; line.EndCap = LineCap.Round;
+                    g.DrawLine(line, b.Left + 5 + w / 2, y, b.Right - 5 - w / 2, y);
+                }
+            }
+        }
+
         int AddButton(string text, int x, EventHandler onClick) { return AddButton(text, x, onClick, null); }
         int AddButton(string text, int x, EventHandler onClick, string tip)
         {
@@ -271,10 +307,10 @@ namespace SimpleDrawingPadApp
         {
             FitStatus();
             hint.SetToolTip(status, ctx != IntPtr.Zero
-                ? "Tablet mode: while this window is active, the whole tablet draws on this sheet. Pen back end or a side button = eraser."
+                ? "Tablet mode: while this window is active, the whole tablet draws on this sheet. Pen back end or a side button = eraser. The mouse draws too while the pen is away."
                 : "Mouse mode: draws where the mouse, pen or finger is (no Wintab tablet driver, or a pen display / touch screen).");
             if (hover) InvalidateCursor();   // the circle may have grown (eraser, width)
-            bar.Invalidate();                // the version text hides itself if the longer status would reach it
+            bar.Invalidate();                // the width lines (width, colour, eraser); the version text hides itself if the longer status would reach it
         }
         // the full text, or a shorter one when it would run past the end of the bar (125% scaling or more, a 1366-px
         // screen): the colour name is left out first, then "width n/5". "Shift+Enter: save as" always stays.
@@ -356,8 +392,12 @@ namespace SimpleDrawingPadApp
                 if (Wintab.WTPacket(m.LParam, (uint)m.WParam.ToInt64(), ref p)) OnPen(p);
                 return;
             }
-            // pen left the tablet's range: the stroke ends even if no "lifted" packet arrived
-            if (m.Msg == Wintab.WT_PROXIMITY && (m.LParam.ToInt64() & 0xFFFF) == 0) cur = null;
+            // pen entered or left the tablet's range; leaving ends the stroke even if no "lifted" packet arrived
+            if (m.Msg == Wintab.WT_PROXIMITY && ctx != IntPtr.Zero)
+            {
+                if ((m.LParam.ToInt64() & 0xFFFF) != 0) PenArrived();
+                else { cur = null; touchPending = false; PenLeft(); }
+            }
             base.WndProc(ref m);
         }
 
@@ -377,6 +417,7 @@ namespace SimpleDrawingPadApp
             bool tipDown = (p.pkButtons & 1) != 0;
             if (tipDown) tipBitSeen = true;
             bool inRange = (p.pkStatus & Wintab.TPS_PROXIMITY) == 0;
+            if (inRange) PenArrived(); else PenLeft();
             bool contact = inRange && (tipBitSeen ? tipDown : pr > 0.01f);
             if (contact)
             {
@@ -411,16 +452,33 @@ namespace SimpleDrawingPadApp
             Invalidate(SheetToScreen(RectangleF.FromLTRB(Math.Min(a.X, b.X) - m, Math.Min(a.Y, b.Y) - m, Math.Max(a.X, b.X) + m, Math.Max(a.Y, b.Y) + m)));
         }
 
-        // ---------- mouse fallback (no Wintab)
+        // the cursor is kept on the sheet while the pen is near (a pen tap can never hit the toolbar), and freed when
+        // the pen leaves, so the mouse can reach the toolbar and other windows
+        void PenArrived()
+        {
+            if (penNear) return;
+            penNear = true;
+            if (cur != null && !cur.FromPen) cur = null;   // a mouse stroke ends when the pen comes
+            if (Form.ActiveForm == this) Reclip();
+        }
+        void PenLeft()
+        {
+            if (!penNear) return;
+            penNear = false; hover = false;
+            Native.ClipCursor(IntPtr.Zero);
+            Invalidate(lastCursorRect);
+        }
+
+        // ---------- mouse (no Wintab, or the pen is away from the tablet)
         PointF ToSheet(Point pt)
         {
             Rectangle r = SheetRect();
             return new PointF(Math.Max(0, Math.Min(SheetW, (pt.X - r.Left) * (float)SheetW / r.Width)),
                               Math.Max(0, Math.Min(SheetH, (pt.Y - r.Top) * (float)SheetH / r.Height)));
         }
-        protected override void OnMouseDown(MouseEventArgs e) { if (ctx == IntPtr.Zero && e.Button == MouseButtons.Left) StartStroke(ToSheet(e.Location), 0.55f, false); }
-        protected override void OnMouseMove(MouseEventArgs e) { if (ctx == IntPtr.Zero && cur != null) AddPoint(ToSheet(e.Location), 0.55f); }
-        protected override void OnMouseUp(MouseEventArgs e) { if (ctx == IntPtr.Zero) cur = null; }
+        protected override void OnMouseDown(MouseEventArgs e) { if (MouseDraws && e.Button == MouseButtons.Left) { StartStroke(ToSheet(e.Location), 0.55f, false); cur.FromPen = false; } }
+        protected override void OnMouseMove(MouseEventArgs e) { if (MouseDraws && cur != null && !cur.FromPen) AddPoint(ToSheet(e.Location), 0.55f); }
+        protected override void OnMouseUp(MouseEventArgs e) { if (MouseDraws && cur != null && !cur.FromPen) cur = null; }
 
         // ---------- drawing
         void StartStroke(PointF pt, float pr, bool eraserTip)
@@ -503,7 +561,7 @@ namespace SimpleDrawingPadApp
         // the clip follows the sheet (tablet mode, active window only); a minimized board frees the cursor
         void Reclip()
         {
-            if (inMoveSize || ctx == IntPtr.Zero || Form.ActiveForm != this) return;
+            if (inMoveSize || ctx == IntPtr.Zero || !penNear || Form.ActiveForm != this) return;
             if (WindowState == FormWindowState.Minimized) Native.ClipCursor(IntPtr.Zero); else ClipToWindow();
         }
 
@@ -517,13 +575,13 @@ namespace SimpleDrawingPadApp
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
-            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, true); Wintab.WTOverlap(ctx, true); ClipToWindow(); }
+            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, true); Wintab.WTOverlap(ctx, true); Reclip(); }
         }
         protected override void OnDeactivate(EventArgs e)
         {
             base.OnDeactivate(e);
             Native.ClipCursor(IntPtr.Zero);
-            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, false); cur = null; hover = false; Invalidate(); }
+            if (ctx != IntPtr.Zero) { Wintab.WTEnable(ctx, false); cur = null; hover = false; penNear = false; Invalidate(); }
         }
         // keys are handled before any button sees them (Enter would otherwise click a focused button,
         // and the arrow keys sent by the numpad with Num Lock off would move focus)
@@ -668,7 +726,7 @@ namespace SimpleDrawingPadApp
             Keys.Control | Keys.C, Keys.Control | Keys.V, Keys.Control | Keys.X, Keys.Control | Keys.Z,
             Keys.Control | Keys.Y, Keys.Control | Keys.A, Keys.Control | Keys.S, Keys.Alt | Keys.F4 };
 
-        public TrayContext()
+        public TrayContext(bool drawNow, System.Threading.EventWaitHandle drawRequest)
         {
             icon.Icon = AppIcon.Small;
             ContextMenu menu = new ContextMenu();
@@ -676,7 +734,9 @@ namespace SimpleDrawingPadApp
             changeItem = menu.MenuItems.Add("Change shortcut…", delegate { ChangeShortcut(); });
             exitItem = menu.MenuItems.Add("Exit", delegate { Exit(); });
             icon.ContextMenu = menu;
-            icon.DoubleClick += delegate { OpenBoard(); };
+            // one click or tap on the icon opens the board: on a tablet without a keyboard this and the Start menu
+            // tile are the only ways in (OpenBoard only brings an open board to the front, so a double click is harmless)
+            icon.MouseClick += delegate(object s, MouseEventArgs e) { if (e.Button == MouseButtons.Left) OpenBoard(); };
             icon.Visible = true;
             hk = new ShortcutWindow(OpenBoard);
             Keys saved = DefaultShortcut;
@@ -689,6 +749,12 @@ namespace SimpleDrawingPadApp
             if (Array.IndexOf(Reserved, saved) >= 0) saved = DefaultShortcut;
             if (!Apply(saved))
                 icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format("The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".", Shortcuts.Format(saved)), ToolTipIcon.Warning);
+            // a later start from the Start menu or the Store's Open button sets this event (see Program.RunTray); the
+            // wait runs on a pool thread, so it only posts a message and the board opens on this thread
+            if (drawRequest != null)
+                System.Threading.ThreadPool.RegisterWaitForSingleObject(drawRequest,
+                    delegate { Native.PostMessage(hk.Handle, ShortcutWindow.WM_DRAW, IntPtr.Zero, IntPtr.Zero); }, null, -1, false);
+            if (drawNow) Native.PostMessage(hk.Handle, ShortcutWindow.WM_DRAW, IntPtr.Zero, IntPtr.Zero);   // once the message loop runs
         }
 
         // registers the shortcut system-wide; false if another program already owns it, or if the helper is exiting
@@ -720,6 +786,17 @@ namespace SimpleDrawingPadApp
                 File.WriteAllText(StateFile, text);
             }
             catch (Exception) { }
+        }
+        // the process id the running helper wrote to helper.txt (line 3), or 0
+        public static int RunningHelperId()
+        {
+            try
+            {
+                string[] lines = File.ReadAllLines(StateFile);
+                int pid;
+                return lines.Length > 2 && int.TryParse(lines[2], out pid) && pid > 0 ? pid : 0;
+            }
+            catch (Exception) { return 0; }
         }
         // on exit the file goes away, unless another helper has written it since
         static void RemoveState()
@@ -890,10 +967,11 @@ namespace SimpleDrawingPadApp
     class ShortcutWindow : NativeWindow
     {
         readonly MethodInvoker onShortcut;
+        public const int WM_DRAW = 0x8001;   // WM_APP + 1: open the board (a start from the Start menu, or the board's own start)
         public ShortcutWindow(MethodInvoker onShortcut) { this.onShortcut = onShortcut; CreateHandle(new CreateParams()); }
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == Native.WM_HOTKEY) onShortcut();
+            if (m.Msg == Native.WM_HOTKEY || m.Msg == WM_DRAW) onShortcut();
             base.WndProc(ref m);
         }
     }
@@ -906,12 +984,16 @@ namespace SimpleDrawingPadApp
             try { Native.SetProcessDpiAwareness(2); } catch (Exception) { try { Native.SetProcessDPIAware(); } catch (Exception) { } }
             Application.EnableVisualStyles();
             if (args.Length > 0 && args[0] == "--board") Application.Run(new BoardForm());
-            else RunTray();
+            // a start without arguments is the user's: the Start menu, the Store's Open button or a double click, so it
+            // also opens the board (on a tablet without a keyboard there is no other way in). The plugin's starts and
+            // the Store package's startup task at sign-in pass --tray (store/AppxManifest.xml) and stay quiet.
+            else RunTray(!(args.Length > 0 && args[0] == "--tray"));
         }
 
-        // one tray helper per user session: a second --tray start (another plugin copy, a double start) exits quietly
-        // before it adds an icon, tries the shortcut or writes helper.txt
-        static void RunTray()
+        // one tray helper per user session. A second start exits before it adds an icon, tries the shortcut or writes
+        // helper.txt; if it was asked to draw, it first tells the running helper to open the board.
+        const string DrawRequestName = @"Local\SimpleDrawingPad.Draw";
+        static void RunTray(bool draw)
         {
             System.Threading.Mutex one;
             bool first;
@@ -919,8 +1001,28 @@ namespace SimpleDrawingPadApp
             catch (UnauthorizedAccessException) { return; }   // it exists, made by a helper running with other rights
             using (one)
             {
-                if (!first) return;
-                Application.Run(new TrayContext());
+                if (!first)
+                {
+                    if (draw)
+                    {
+                        System.Threading.EventWaitHandle request;
+                        if (System.Threading.EventWaitHandle.TryOpenExisting(DrawRequestName, out request))
+                            using (request)
+                            {
+                                // this start came from the user, so it may let the running helper (only that process)
+                                // bring the board to the front; without its id the board still opens, maybe behind
+                                int pid = TrayContext.RunningHelperId();
+                                if (pid > 0) Native.AllowSetForegroundWindow(pid);
+                                request.Set();
+                            }
+                    }
+                    return;
+                }
+                System.Threading.EventWaitHandle drawRequest = null;
+                try { drawRequest = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, DrawRequestName); }
+                catch (Exception) { }   // without it a second start just exits, as before
+                try { Application.Run(new TrayContext(draw, drawRequest)); }
+                finally { if (drawRequest != null) drawRequest.Close(); }
             }
         }
     }

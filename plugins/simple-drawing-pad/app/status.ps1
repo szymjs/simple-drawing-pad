@@ -12,6 +12,9 @@
 # OneDrive does not sync it. A program still in the old folder (0.5.1 to 0.7.9) is reported as an update to install.
 # The report reads the real registry through WMI (StdRegProv) for the Windows Settings > Apps line, so it says what
 # Windows shows and not what this process sees. The line is informational; it does not change the state.
+# Since 0.9.9 the program may also be the Microsoft Store version (the same program, signed by Microsoft, under
+# C:\Program Files\WindowsApps, updated by the Store); it writes the same files. The check asks Windows for that one
+# package by name, only when no helper runs and no local build is installed (and always for the report).
 # The plugin comes with the user's Claude account; the program is installed separately on each Windows computer.
 param([switch]$SessionStart)
 $ErrorActionPreference = 'Stop'
@@ -37,6 +40,11 @@ function ConvertTo-AsciiJson($value) {
     [regex]::Replace(($value | ConvertTo-Json -Compress -Depth 4), '[^\x00-\x7F]', { param($m) '\u{0:x4}' -f [int][char]$m.Value })
 }
 
+# the Microsoft Store version of the program (store\AppxManifest.xml in the repository): its version when it is
+# installed for this user, else ''. One package, asked for by name; nothing else is listed
+$storeName = 'SzymonStanszewski.SimpleDrawingPad'
+function Get-StoreVersion { try { [string](Get-AppxPackage -Name $storeName -ErrorAction Stop | Select-Object -First 1).Version } catch { '' } }
+
 try {
     $here = Split-Path -Parent $MyInvocation.MyCommand.Path
     $root = Join-Path $env:USERPROFILE 'simple-drawing-pad'                         # one folder for everything (0.8.0+)
@@ -61,6 +69,7 @@ try {
     $oldData = Join-Path $env:LOCALAPPDATA 'simple-drawing-pad'
     $oldNoticeFile = Join-Path $oldData 'notice.txt'                                # a notice shown by a plugin up to 0.7.9
     $oldLegacyOff = Join-Path $oldData 'no-reminder.txt'                            # uninstall.ps1 0.5.0 to 0.7.9: no notice
+    $storePath = Join-Path $env:ProgramFiles "WindowsApps\${storeName}_*\SimpleDrawingPad.exe"   # where Windows keeps the Store version
 
     $installed = Test-Path -LiteralPath $exe
     $legacy = (-not $installed) -and (Test-Path -LiteralPath $oldExe)   # installed by a plugin up to 0.7.9 and not replaced yet
@@ -78,8 +87,18 @@ try {
     }
     if ($helpers.Count -eq 0) {
         $helpers = @(Get-Process -Name SimpleDrawingPad -ErrorAction SilentlyContinue |
-            Where-Object { $_.SessionId -eq $session -and ($_.Path -eq $exe -or ($legacy -and $_.Path -eq $oldExe)) } | ForEach-Object { [pscustomobject]@{ ProcessId = $_.Id } })
+            Where-Object { $_.SessionId -eq $session -and ($_.Path -eq $exe -or ($legacy -and $_.Path -eq $oldExe) -or $_.Path -like $storePath) } | ForEach-Object { [pscustomobject]@{ ProcessId = $_.Id } })
     }
+    $running = $helpers.Count -ge 1
+    # which program the running helper is: the local build, the Store version, one left in the old folder, or
+    # unknown (a path Windows does not tell, for example a helper started as administrator)
+    $runsFrom = ''
+    if ($running) {
+        $path = (Get-Process -Id $helpers[0].ProcessId -ErrorAction SilentlyContinue).Path
+        $runsFrom = if ($path -eq $exe) { 'local' } elseif ($path -eq $oldExe) { 'old' } elseif ($path -and $path -like $storePath) { 'store' } else { 'other' }
+    }
+    # asked only when it can change what is said: no helper runs and no local build is installed; the report always asks
+    $storeVersion = if (-not $SessionStart -or (-not $running -and -not $installed)) { Get-StoreVersion } else { '' }
 
     $hk = 'Ctrl+Alt+D'   # a changed shortcut is reported by the helper itself (helper.txt)
     # helper.txt: ok | taken, shortcut, process id, time. Trusted only from the one running helper: a helper older
@@ -117,21 +136,33 @@ try {
         }
     }
 
-    if ($legacy) {
-        $state = 'update-available'
-        $todo = "The helper program was installed by an earlier plugin version in $oldDir. Since 0.8.0 the program and the drawings are in one folder, $root, and the helper starts with Windows by a shortcut in the Startup folder; with the Claude app from the Microsoft Store the earlier version did not start after a restart. Run /simple-drawing-pad:install (it installs the program in $root and removes the old one; drawings of the earlier version stay in their folder)."
-    } elseif (-not $installed) {
-        $state = 'not-installed'
-        $todo = "The drawing window's helper program is not installed on this computer, so $hk does nothing. Run /simple-drawing-pad:install once on each Windows computer."
-    } elseif ($helpers.Count -eq 0) {
-        $state = 'not-running'
-        $todo = "The helper program is installed but not running, so $hk does nothing. Run /simple-drawing-pad:install to start it again."
+    # a running helper counts, whichever program it is: the Store version is the recommended one, the local build
+    # and a program left by a plugin up to 0.7.9 are the others. The legacy text is used when that old program is the
+    # one found (not running, or the one running)
+    $legacyTodo = "The helper program was installed by an earlier plugin version in $oldDir. Since 0.8.0 the program and the drawings are in one folder, $root, and the helper starts with Windows; with the Claude app from the Microsoft Store the earlier version did not start after a restart. Run /simple-drawing-pad:install (the Microsoft Store version is recommended; it removes the old program first, and drawings of the earlier version stay in their folder)."
+    if (-not $running) {
+        if ($legacy -and -not $storeVersion) {
+            $state = 'update-available'
+            $todo = $legacyTodo
+        } elseif ($storeVersion -and -not $installed) {
+            $state = 'not-running'
+            $todo = "Simple Drawing Pad $storeVersion from the Microsoft Store is installed but not running, so $hk does nothing. Open Simple Drawing Pad from the Start menu once; from then on it also starts with Windows."
+        } elseif ($installed) {
+            $state = 'not-running'
+            $todo = "The helper program is installed but not running, so $hk does nothing. Run /simple-drawing-pad:install to start it again."
+        } else {
+            $state = 'not-installed'
+            $todo = "The drawing window's helper program is not installed on this computer, so $hk does nothing. Run /simple-drawing-pad:install once on each Windows computer: it installs the program from the Microsoft Store (recommended), or builds it from the plugin's included source with /simple-drawing-pad:install local."
+        }
     } elseif ($shortcut -eq 'taken') {
         $state = 'shortcut-taken'
         $todo = "$hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad icon in the notification area and choose ""Change shortcut""."
-    } elseif ($outdated) {
+    } elseif ($runsFrom -eq 'old') {
         $state = 'update-available'
-        $todo = "This plugin version comes with an updated helper program. Run /simple-drawing-pad:install to update it."
+        $todo = $legacyTodo
+    } elseif ($runsFrom -eq 'local' -and $outdated) {
+        $state = 'update-available'
+        $todo = "This plugin version comes with an updated helper program. Run /simple-drawing-pad:install local to update it, or /simple-drawing-pad:install to switch to the Microsoft Store version, which updates itself."
     } else {
         $state = 'ready'
         $todo = "Press $hk to draw. Enter copies the drawing to the clipboard, Ctrl+V pastes it."
@@ -157,8 +188,10 @@ try {
     if ($SessionStart) {
         if ($state -eq 'ready') {
             # all well: a later problem gets its one notice again (an update notice shown by a newer plugin copy for
-            # this same program stays remembered)
+            # this same program stays remembered). A helper that runs again also ends "removed on purpose": the local
+            # install deletes that marker itself, a Store install cannot
             if ((Test-Path -LiteralPath $noticeFile) -and $shown -ne $updateNotice) { Remove-Item -LiteralPath $noticeFile }
+            if (Test-Path -LiteralPath $legacyOff) { Remove-Item -LiteralPath $legacyOff }
             exit 0
         }
         $tell = $null
@@ -167,14 +200,17 @@ try {
                 'not-installed' {
                     "Simple Drawing Pad - a one-time question on this computer.`n" +
                     "This plugin works together with a small helper program on this computer: a pencil icon by the clock (under ^ if Windows hides it) that opens a drawing window when you press $hk. Enter copies the drawing; Ctrl+V pastes it into the chat or any other app. $hk works in every program; if it clashes with a character on your keyboard layout, change it from the pencil icon's menu (""Change shortcut"").`n" +
-                    "The helper works only locally: it does not use the network, sends nothing and collects nothing. It is built from the source code included in the plugin (nothing is downloaded, no administrator rights), starts with Windows (a shortcut in your Startup folder) and keeps only your last drawing, latest.png, in $drawings on this computer, until the next one. You can remove it with /simple-drawing-pad:uninstall (also in Windows Settings > Apps, when Windows shows it there).`n" +
-                    "To install it, run /simple-drawing-pad:install, or just answer ""yes"" and Claude runs it for you. This question is not shown again on this computer."
+                    "The helper works only locally: it does not use the network, sends nothing and collects nothing. It starts with Windows and keeps only your last drawing, latest.png, in $drawings on this computer, until the next one. Recommended: install it from the Microsoft Store (signed by Microsoft and updated by the Store). The same program can also be built on this PC from the source included in the plugin (nothing is downloaded, no administrator rights; Windows may block an unsigned program). You can remove it in Windows Settings > Apps or with /simple-drawing-pad:uninstall.`n" +
+                    "To install it, run /simple-drawing-pad:install (the Store version; /simple-drawing-pad:install local builds it here), or just answer ""yes"" and Claude installs the Store version for you. This question is not shown again on this computer."
                 }
-                'not-running' { "Simple Drawing Pad: the helper program is installed but not running, so $hk does nothing. /simple-drawing-pad:install starts it again. (Shown once.)" }
+                'not-running' {
+                    if ($storeVersion -and -not $installed) { "Simple Drawing Pad: the program from the Microsoft Store is installed but not running, so $hk does nothing. Open Simple Drawing Pad from the Start menu once; from then on it also starts with Windows. (Shown once.)" }
+                    else { "Simple Drawing Pad: the helper program is installed but not running, so $hk does nothing. /simple-drawing-pad:install starts it again. (Shown once.)" }
+                }
                 'shortcut-taken' { "Simple Drawing Pad: $hk is taken by another program, so it does not open the drawing window. Right-click the Simple Drawing Pad pencil icon by the clock (under ^ if hidden) and choose ""Change shortcut"". (Shown once.)" }
                 'update-available' {
-                    if ($legacy) { "Simple Drawing Pad: this update keeps the helper program and your drawings in one folder, $root, and starts the helper with Windows by a shortcut in your Startup folder. With the Claude app from the Microsoft Store the previous version did not start after a restart. /simple-drawing-pad:install installs the program there in a few seconds and removes the old one; drawings of the previous version stay where they are. (Shown once.)" }
-                    else { "Simple Drawing Pad: this plugin version comes with an updated helper program. /simple-drawing-pad:install updates it in a few seconds. (Shown once.)" }
+                    if ($legacy -or $runsFrom -eq 'old') { "Simple Drawing Pad: this update keeps the helper program and your drawings in one folder, $root, and starts the helper with Windows. With the Claude app from the Microsoft Store the previous version did not start after a restart. /simple-drawing-pad:install installs the program again (the Microsoft Store version is recommended) and removes the old one; drawings of the previous version stay where they are. (Shown once.)" }
+                    else { "Simple Drawing Pad: this plugin version comes with an updated helper program. /simple-drawing-pad:install local updates it in a few seconds, or /simple-drawing-pad:install switches to the Microsoft Store version, which updates itself. (Shown once.)" }
                 }
             }
             try { [IO.Directory]::CreateDirectory($root) | Out-Null; [IO.File]::WriteAllText($noticeFile, $notice) } catch { }
@@ -182,10 +218,10 @@ try {
         $context = if ($state -eq 'not-installed' -and $tell) {
             'Simple Drawing Pad plugin: the helper program for the pen window is NOT installed on this Windows computer (the plugin comes with the Claude account; the helper is installed separately on each computer). ' +
             'The user has just been shown a one-time question, in the session-start message, whether to install it; it is not shown again. ' +
-            "If the user agrees (for example answers yes, in any language) or asks for it, run the /simple-drawing-pad:install command for them: it is the plugin's only installation path, and it installs, checks and tells the user whether it works. " +
+            "If the user agrees (for example answers yes, in any language) or asks for it, run the /simple-drawing-pad:install command for them: it is the plugin's only installation path. It installs the program from the Microsoft Store (recommended: the same program, signed by Microsoft and updated by the Store) or, with the argument local, builds it from the plugin's included source; then it checks and tells the user whether it works. " +
             'If their first message is about something else, end your reply with one short sentence offering the installation; if they decline or ignore it, do not bring it up again. ' +
             "Whenever you offer or explain the installation yourself, include one sentence that $hk works in every program and, if it clashes with a character on their keyboard layout, they can change it from the pencil icon's menu (Change shortcut). " +
-            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), is built from the included source (nothing downloaded, no administrator rights), starts with Windows (a shortcut in the Startup folder), keeps only the last drawing, latest.png, in $drawings until the next one (one folder under the user profile, the same for every program on this computer), and can be removed with /simple-drawing-pad:uninstall (also in Windows Settings > Apps, when Windows shows it there)."
+            "Facts you may repeat: the helper works only locally (no network, sends and collects nothing), comes from the Microsoft Store signed by Microsoft or is built from the included source (no administrator rights either way), starts with Windows, keeps only the last drawing, latest.png, in $drawings until the next one (one folder under the user profile, the same for every program on this computer), and can be removed in Windows Settings > Apps or with /simple-drawing-pad:uninstall."
         } elseif ($tell) {
             "Simple Drawing Pad plugin, pen window status on this Windows computer: $state. $todo The user has just been shown this once. If they want to draw or ask about it, offer the fix; ask before installing."
         } else {
@@ -206,17 +242,24 @@ try {
         $listed = [bool]($r -and $r.ReturnValue -eq 0 -and $r.sValue)
     } catch { }
 
+    $programs = @()
+    if ($storeVersion) { $programs += "Microsoft Store version $storeVersion (signed by Microsoft, updated by the Store)" }
+    if ($installed) { $programs += "local build ($exe)" }
+    if ($legacy) { $programs += "installed by an earlier plugin version ($oldExe); not yet replaced" }
+    $from = switch ($runsFrom) { 'store' { ', the Store version' } 'local' { ', the local build' } 'old' { ', from the old folder' } default { '' } }
     'Simple Drawing Pad on this computer'
-    'Program:   ' + $(if ($installed) { "installed ($exe)" } elseif ($legacy) { "installed by an earlier plugin version ($oldExe); not yet replaced by one in $dir" } else { 'not installed' })
-    'Helper:    ' + $(switch ($helpers.Count) { 0 { 'not running' } 1 { "running (process $($helpers[0].ProcessId))" }
+    'Program:   ' + $(if ($programs.Count) { $programs -join '; ' } else { 'not installed' })
+    'Helper:    ' + $(switch ($helpers.Count) { 0 { 'not running' } 1 { "running (process $($helpers[0].ProcessId)$from)" }
                           default { "$_ running (processes $(($helpers | ForEach-Object { $_.ProcessId }) -join ', ')); /simple-drawing-pad:install restarts one" } })
     'Shortcut:  ' + $(switch ($shortcut) { 'ok' { "$hk works" } 'taken' { "$hk is taken by another program" } default { "$hk (not reported by the helper)" } })
-    'Autostart: ' + $(if ($autostart) { 'on (shortcut in the Startup folder)' } else { 'off (the helper does not start by itself after a restart)' }) +
+    'Autostart: ' + $(if ($runsFrom -eq 'store' -or ($storeVersion -and -not $installed)) { 'Store version: starts with Windows once it has been opened (Windows Settings > Apps > Startup)' }
+                      elseif ($autostart) { 'on (shortcut in the Startup folder)' } else { 'off (the helper does not start by itself after a restart)' }) +
                     $(if ($oldRun) { '; legacy registry entry present (removed by /simple-drawing-pad:install)' })
     'Drawings:  ' + $drawings + ' (this computer only; keeps only the last drawing, latest.png, until the next one)'
-    if ($installed -or $legacy) { 'Removal:   /simple-drawing-pad:uninstall ' + $(if ($listed) { '(also listed in Windows Settings > Apps)' } else { '(not listed in Windows Settings > Apps on this computer)' }) }
-    if ($outdated) { 'Update:    this plugin version comes with an updated helper program' }
-    elseif ($legacy) { "Update:    this plugin version installs the program in $root and removes the old one" }
+    if ($storeVersion) { 'Removal:   Windows Settings > Apps > Simple Drawing Pad, or /simple-drawing-pad:uninstall' }
+    if ($installed -or $legacy) { 'Removal:   /simple-drawing-pad:uninstall ' + $(if ($listed) { '(the local build is also listed in Windows Settings > Apps)' } else { '(the local build is not listed in Windows Settings > Apps on this computer)' }) }
+    if ($outdated -and $runsFrom -ne 'store') { 'Update:    this plugin version comes with an updated helper program (local build); the Store version updates itself' }
+    elseif ($legacy -and $runsFrom -ne 'store') { "Update:    this plugin version installs the program again and removes the old one" }
     if ($ahead) { "Version:   the installed program is newer ($ahead); nothing to do" }
     if ($shown -match '^(not-installed|not-running|shortcut-taken|update-available)( [0-9a-f]{64})?$') { "Notice:    already shown on this computer ($($shown.Split(' ')[0])); not shown again" }
     "Result: ${state}: $todo"
