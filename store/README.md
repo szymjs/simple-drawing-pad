@@ -6,7 +6,9 @@ App Control, which blocks a program that has no publisher signature (the plugin'
 user's PC, so its program has none).
 
 - `AppxManifest.xml`: the package identity from Partner Center, the full-trust desktop app, and one startup task that
-  starts the notification-area helper at sign-in (the user can turn it off in Settings > Apps > Startup).
+  starts the notification-area helper at sign-in with `--tray` (the user can turn it off in Settings > Apps > Startup).
+  The Start menu tile and the Store's Open button start it without arguments, which also opens the drawing window.
+  Windows 10 2004 (19041) or later, for the startup task's `uap10:Parameters`.
 - `Assets\`: the logos, scaled from the plugin icon.
 - `build-msix.ps1`: builds the helper from the plugin's source and packs it into `out\SimpleDrawingPad_<version>_x64.msix`.
   It needs makeappx.exe (Windows SDK Build Tools): `.\build-msix.ps1 -MakeAppx "C:\path\to\makeappx.exe"`.
@@ -20,7 +22,8 @@ Simple Drawing Pad is a classic Win32 desktop program (.NET Framework). It runs 
 global keyboard shortcut with RegisterHotKey (no keyboard hook, no keystrokes are read), loads the tablet driver's
 Wintab32.dll from System32 for pen input, puts the finished drawing on the clipboard, and writes files under
 %USERPROFILE%\simple-drawing-pad. It uses no network, never asks for elevation and starts no services. The startup task
-starts the notification-area helper at sign-in; the user can turn it off in Settings.
+starts the notification-area helper at sign-in; the user can turn it off in Settings. Opening the app from the Start
+menu or the Store opens the drawing window.
 
 ## Store listing text
 
