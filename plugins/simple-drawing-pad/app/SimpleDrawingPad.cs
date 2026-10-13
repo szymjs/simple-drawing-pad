@@ -7,8 +7,8 @@
 //
 // Usage:  SimpleDrawingPad.exe --board  open the board now, exit after closing it
 //         SimpleDrawingPad.exe          --tray, and also opens the board: a start from the Start menu, the Store's Open
-//                                       button or a double click. Only the Store package's startup task at sign-in starts
-//                                       it without arguments and no board. If a helper already runs, it opens the board.
+//                                       button or a double click. If a helper already runs, that helper opens the board.
+//                                       The Store package's startup task at sign-in passes --tray (store/AppxManifest.xml).
 //         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
 //                                       the tray menu, kept in %USERPROFILE%\simple-drawing-pad\shortcut.txt) opens the board.
 //                                       When that file does not exist, the setting of 0.7.9 and earlier is read once from
@@ -93,9 +93,6 @@ namespace SimpleDrawingPadApp
         [DllImport("user32.dll")] public static extern IntPtr GetMessageExtraInfo();
         [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int processId);
-        public const int ASFW_ANY = -1;
-        // 0 when the program runs from an MSIX package (the Store version), 15700 (APPMODEL_ERROR_NO_PACKAGE) otherwise
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern int GetCurrentPackageFullName(ref int length, System.Text.StringBuilder name);
         // mouse messages that Windows made from a pen or touch carry this signature in GetMessageExtraInfo
         public static bool FromPenOrTouch() { return (GetMessageExtraInfo().ToInt64() & 0xFFFFFF00) == 0xFF515700; }
         [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
@@ -790,6 +787,17 @@ namespace SimpleDrawingPadApp
             }
             catch (Exception) { }
         }
+        // the process id the running helper wrote to helper.txt (line 3), or 0
+        public static int RunningHelperId()
+        {
+            try
+            {
+                string[] lines = File.ReadAllLines(StateFile);
+                int pid;
+                return lines.Length > 2 && int.TryParse(lines[2], out pid) && pid > 0 ? pid : 0;
+            }
+            catch (Exception) { return 0; }
+        }
         // on exit the file goes away, unless another helper has written it since
         static void RemoveState()
         {
@@ -976,27 +984,10 @@ namespace SimpleDrawingPadApp
             try { Native.SetProcessDpiAwareness(2); } catch (Exception) { try { Native.SetProcessDPIAware(); } catch (Exception) { } }
             Application.EnableVisualStyles();
             if (args.Length > 0 && args[0] == "--board") Application.Run(new BoardForm());
-            else RunTray(args.Length > 0 && args[0] == "--tray" ? false : !StartedAtSignIn());
-        }
-
-        // A start without arguments comes from the Start menu, the Store's Open button, a double click on the program,
-        // or (Store version only) the package's startup task at sign-in. All but the last also open the board, so the
-        // program can be used without a keyboard. The plugin's own starts pass --tray and never open it.
-        static bool StartedAtSignIn()
-        {
-            int length = 0;
-            try { if (Native.GetCurrentPackageFullName(ref length, null) == 15700) return false; }   // 122 (buffer too small) = packaged
-            catch (Exception) { return false; }   // Windows 7: no packages
-            try
-            {
-                // Windows.ApplicationModel.AppInstance, read by name so the program needs no WinRT references to build
-                Type app = Type.GetType("Windows.ApplicationModel.AppInstance, Windows.ApplicationModel, ContentType=WindowsRuntime");
-                Type activated = Type.GetType("Windows.ApplicationModel.Activation.IActivatedEventArgs, Windows.ApplicationModel, ContentType=WindowsRuntime");
-                object a = app.GetMethod("GetActivatedEventArgs").Invoke(null, null);
-                if (a == null) return false;   // a plain start
-                return Convert.ToInt32(activated.GetProperty("Kind").GetValue(a, null)) == 1020;   // ActivationKind.StartupTask
-            }
-            catch (Exception) { return true; }   // cannot tell: stay quiet, as 0.9.8 always did
+            // a start without arguments is the user's: the Start menu, the Store's Open button or a double click, so it
+            // also opens the board (on a tablet without a keyboard there is no other way in). The plugin's starts and
+            // the Store package's startup task at sign-in pass --tray (store/AppxManifest.xml) and stay quiet.
+            else RunTray(!(args.Length > 0 && args[0] == "--tray"));
         }
 
         // one tray helper per user session. A second start exits before it adds an icon, tries the shortcut or writes
@@ -1018,7 +1009,10 @@ namespace SimpleDrawingPadApp
                         if (System.Threading.EventWaitHandle.TryOpenExisting(DrawRequestName, out request))
                             using (request)
                             {
-                                Native.AllowSetForegroundWindow(Native.ASFW_ANY);   // this start came from the user, so the board may come to the front
+                                // this start came from the user, so it may let the running helper (only that process)
+                                // bring the board to the front; without its id the board still opens, maybe behind
+                                int pid = TrayContext.RunningHelperId();
+                                if (pid > 0) Native.AllowSetForegroundWindow(pid);
                                 request.Set();
                             }
                     }
