@@ -6,13 +6,15 @@
 // It works only on this computer: no network access, nothing is sent or collected.
 //
 // Usage:  SimpleDrawingPad.exe --board  open the board now, exit after closing it
-//         SimpleDrawingPad.exe          the same as --tray (the Store app and its startup task start it without arguments)
+//         SimpleDrawingPad.exe          --tray, and also opens the board: a start from the Start menu, the Store's Open
+//                                       button or a double click. Only the Store package's startup task at sign-in starts
+//                                       it without arguments and no board. If a helper already runs, it opens the board.
 //         SimpleDrawingPad.exe --tray   stay in the notification area; a shortcut (default Ctrl+Alt+D, changeable from
 //                                       the tray menu, kept in %USERPROFILE%\simple-drawing-pad\shortcut.txt) opens the board.
 //                                       When that file does not exist, the setting of 0.7.9 and earlier is read once from
 //                                       %APPDATA%\simple-drawing-pad\shortcut.txt (read only, never written there).
 //                                       One helper per user session: a second --tray start exits at once, quietly
-//                                       (named mutex Local\SimpleDrawingPad.Tray).
+//                                       (named mutex Local\SimpleDrawingPad.Tray). One click on the tray icon opens the board.
 // Folder: everything is in %USERPROFILE%\simple-drawing-pad (for example C:\Users\name\simple-drawing-pad). A folder
 //         directly under the user profile is the same folder for every program that runs as the user, including the
 //         Store version of the Claude app, whose sandbox keeps new folders under AppData to itself; Explorer shows
@@ -89,6 +91,11 @@ namespace SimpleDrawingPadApp
         [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
         [DllImport("user32.dll")] public static extern IntPtr GetMessageExtraInfo();
+        [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int processId);
+        public const int ASFW_ANY = -1;
+        // 0 when the program runs from an MSIX package (the Store version), 15700 (APPMODEL_ERROR_NO_PACKAGE) otherwise
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern int GetCurrentPackageFullName(ref int length, System.Text.StringBuilder name);
         // mouse messages that Windows made from a pen or touch carry this signature in GetMessageExtraInfo
         public static bool FromPenOrTouch() { return (GetMessageExtraInfo().ToInt64() & 0xFFFFFF00) == 0xFF515700; }
         [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
@@ -722,7 +729,7 @@ namespace SimpleDrawingPadApp
             Keys.Control | Keys.C, Keys.Control | Keys.V, Keys.Control | Keys.X, Keys.Control | Keys.Z,
             Keys.Control | Keys.Y, Keys.Control | Keys.A, Keys.Control | Keys.S, Keys.Alt | Keys.F4 };
 
-        public TrayContext()
+        public TrayContext(bool drawNow, System.Threading.EventWaitHandle drawRequest)
         {
             icon.Icon = AppIcon.Small;
             ContextMenu menu = new ContextMenu();
@@ -730,7 +737,9 @@ namespace SimpleDrawingPadApp
             changeItem = menu.MenuItems.Add("Change shortcut…", delegate { ChangeShortcut(); });
             exitItem = menu.MenuItems.Add("Exit", delegate { Exit(); });
             icon.ContextMenu = menu;
-            icon.DoubleClick += delegate { OpenBoard(); };
+            // one click or tap on the icon opens the board: on a tablet without a keyboard this and the Start menu
+            // tile are the only ways in (OpenBoard only brings an open board to the front, so a double click is harmless)
+            icon.MouseClick += delegate(object s, MouseEventArgs e) { if (e.Button == MouseButtons.Left) OpenBoard(); };
             icon.Visible = true;
             hk = new ShortcutWindow(OpenBoard);
             Keys saved = DefaultShortcut;
@@ -743,6 +752,12 @@ namespace SimpleDrawingPadApp
             if (Array.IndexOf(Reserved, saved) >= 0) saved = DefaultShortcut;
             if (!Apply(saved))
                 icon.ShowBalloonTip(5000, "Simple Drawing Pad", string.Format("The shortcut {0} is taken by another program. Right-click this icon and choose \"Change shortcut\".", Shortcuts.Format(saved)), ToolTipIcon.Warning);
+            // a later start from the Start menu or the Store's Open button sets this event (see Program.RunTray); the
+            // wait runs on a pool thread, so it only posts a message and the board opens on this thread
+            if (drawRequest != null)
+                System.Threading.ThreadPool.RegisterWaitForSingleObject(drawRequest,
+                    delegate { Native.PostMessage(hk.Handle, ShortcutWindow.WM_DRAW, IntPtr.Zero, IntPtr.Zero); }, null, -1, false);
+            if (drawNow) Native.PostMessage(hk.Handle, ShortcutWindow.WM_DRAW, IntPtr.Zero, IntPtr.Zero);   // once the message loop runs
         }
 
         // registers the shortcut system-wide; false if another program already owns it, or if the helper is exiting
@@ -944,10 +959,11 @@ namespace SimpleDrawingPadApp
     class ShortcutWindow : NativeWindow
     {
         readonly MethodInvoker onShortcut;
+        public const int WM_DRAW = 0x8001;   // WM_APP + 1: open the board (a start from the Start menu, or the board's own start)
         public ShortcutWindow(MethodInvoker onShortcut) { this.onShortcut = onShortcut; CreateHandle(new CreateParams()); }
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == Native.WM_HOTKEY) onShortcut();
+            if (m.Msg == Native.WM_HOTKEY || m.Msg == WM_DRAW) onShortcut();
             base.WndProc(ref m);
         }
     }
@@ -960,12 +976,33 @@ namespace SimpleDrawingPadApp
             try { Native.SetProcessDpiAwareness(2); } catch (Exception) { try { Native.SetProcessDPIAware(); } catch (Exception) { } }
             Application.EnableVisualStyles();
             if (args.Length > 0 && args[0] == "--board") Application.Run(new BoardForm());
-            else RunTray();
+            else RunTray(args.Length > 0 && args[0] == "--tray" ? false : !StartedAtSignIn());
         }
 
-        // one tray helper per user session: a second --tray start (another plugin copy, a double start) exits quietly
-        // before it adds an icon, tries the shortcut or writes helper.txt
-        static void RunTray()
+        // A start without arguments comes from the Start menu, the Store's Open button, a double click on the program,
+        // or (Store version only) the package's startup task at sign-in. All but the last also open the board, so the
+        // program can be used without a keyboard. The plugin's own starts pass --tray and never open it.
+        static bool StartedAtSignIn()
+        {
+            int length = 0;
+            try { if (Native.GetCurrentPackageFullName(ref length, null) == 15700) return false; }   // 122 (buffer too small) = packaged
+            catch (Exception) { return false; }   // Windows 7: no packages
+            try
+            {
+                // Windows.ApplicationModel.AppInstance, read by name so the program needs no WinRT references to build
+                Type app = Type.GetType("Windows.ApplicationModel.AppInstance, Windows.ApplicationModel, ContentType=WindowsRuntime");
+                Type activated = Type.GetType("Windows.ApplicationModel.Activation.IActivatedEventArgs, Windows.ApplicationModel, ContentType=WindowsRuntime");
+                object a = app.GetMethod("GetActivatedEventArgs").Invoke(null, null);
+                if (a == null) return false;   // a plain start
+                return Convert.ToInt32(activated.GetProperty("Kind").GetValue(a, null)) == 1020;   // ActivationKind.StartupTask
+            }
+            catch (Exception) { return true; }   // cannot tell: stay quiet, as 0.9.8 always did
+        }
+
+        // one tray helper per user session. A second start exits before it adds an icon, tries the shortcut or writes
+        // helper.txt; if it was asked to draw, it first tells the running helper to open the board.
+        const string DrawRequestName = @"Local\SimpleDrawingPad.Draw";
+        static void RunTray(bool draw)
         {
             System.Threading.Mutex one;
             bool first;
@@ -973,8 +1010,25 @@ namespace SimpleDrawingPadApp
             catch (UnauthorizedAccessException) { return; }   // it exists, made by a helper running with other rights
             using (one)
             {
-                if (!first) return;
-                Application.Run(new TrayContext());
+                if (!first)
+                {
+                    if (draw)
+                    {
+                        System.Threading.EventWaitHandle request;
+                        if (System.Threading.EventWaitHandle.TryOpenExisting(DrawRequestName, out request))
+                            using (request)
+                            {
+                                Native.AllowSetForegroundWindow(Native.ASFW_ANY);   // this start came from the user, so the board may come to the front
+                                request.Set();
+                            }
+                    }
+                    return;
+                }
+                System.Threading.EventWaitHandle drawRequest = null;
+                try { drawRequest = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, DrawRequestName); }
+                catch (Exception) { }   // without it a second start just exits, as before
+                try { Application.Run(new TrayContext(draw, drawRequest)); }
+                finally { if (drawRequest != null) drawRequest.Close(); }
             }
         }
     }

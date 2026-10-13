@@ -30,6 +30,9 @@ About ten minutes on a Windows PC with the plugin installed.
 7a. Mouse in tablet mode (a PC with a Wintab driver; with no tablet attached the bar still says `tablet`): the mouse
    draws, and reaches the toolbar buttons. With a tablet: a pen stroke is drawn once, not twice, and the mouse does
    not draw while the pen hovers over the tablet.
+7b. Without a keyboard (Store version): Start menu > Simple Drawing Pad, or Open in the Store: the board opens, with
+   the helper not running and with it already running. One click or tap on the tray icon opens the board. After a
+   restart and sign-in, the helper is in the notification area and no board has opened by itself.
 8. One helper at a time: in PowerShell run
    `& "$env:USERPROFILE\simple-drawing-pad\app\SimpleDrawingPad.exe" --tray`.
    No second pencil icon appears by the clock and no message is shown; Ctrl+Alt+D still opens the drawing window, and
